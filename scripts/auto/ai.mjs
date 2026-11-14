@@ -4,7 +4,7 @@ import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path'
 export function keys() {
   const own = path.join(os.homedir(), '.kader-kora/gemini');
   const raw = process.env.GEMINI_API_KEY || (fs.existsSync(own) ? fs.readFileSync(own, 'utf8') : '');
-  const list = raw.split(/[,\s]+/).map((k) => k.trim()).filter((k) => k.startsWith('AIza'));
+  const list = raw.split(/[,\s]+/).map((k) => k.trim()).filter((k) => /^(AIza|AQ\.)/.test(k) && k.length > 30);
   if (!list.length) throw new Error('مفيش مفتاح Gemini لكادر كورة — شغّل scripts/connect-gemini.sh');
   return list;
 }
