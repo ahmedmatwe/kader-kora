@@ -46,7 +46,7 @@ ${request ? `- صاحب القناة طالب الموضوع ده بالاسم: 
     if (dup) { log(`⊘ «${s.topic}»: متعمل قبل كده («${dup.slice(0, 60)}»)`); continue; }
     const src = [...new Map((s.ids || []).map((i) => hits[i]).filter(Boolean).map((h) => [h.paper, h])).values()];
     if (src.length < 2) { log(`⊘ «${s.topic}»: مصدر واحد بس`); continue; }
-    const v = await verify(s, src, log);
+    const v = await verify(s, src, log, hits.slice().sort((a, b) => b.at - a.at).slice(0, 40));
     if (v) return v;
   }
   return null;
@@ -58,7 +58,8 @@ const toks = (t) => new Set(String(t).replace(/[\u064B-\u0652]/g, '').replace(/[
 export function overlap(a, b) { const A = toks(a), B = toks(b); let n = 0; for (const w of A) if (B.has(w)) n++; return n / Math.max(1, Math.min(A.size, B.size)); }
 
 /** فريق التحقيق: يقرا المقالات نفسها ويطلّع الحقايق اللي متأكدة بس */
-export async function verify(story, src, log = console.log) {
+export async function verify(story, src, log = console.log, latest = []) {
+  const today = new Date().toLocaleString('ar-EG', { timeZone: 'Africa/Cairo', dateStyle: 'full', timeStyle: 'short' });
   const arts = [];
   for (const h of src.slice(0, 5)) { const a = await article(h.url); if (a.text.length > 300) arts.push({ ...h, ...a }); }
   if (new Set(arts.map((a) => a.paper)).size < 2) { log(`⊘ «${story.topic}»: ما قدرناش نقرا جريدتين`); return null; }
@@ -71,6 +72,9 @@ ${arts.map((a, i) => `### [${i}] ${a.paper} — ${a.title} (${a.date || 'تار�
 1) facts: الحقايق اللي في جريدتين أو أكتر (اكتب الجرايد). أي حاجة في جريدة واحدة تتكتب "بحسب <الجريدة>" في claim_single، أو تتشال لو مش مهمة.
 2) conflicts: أي أرقام أو معلومات مختلفة بين الجرايد.
 3) ok=false لو: شائعة مش مؤكدة، أو مخالفة للسياسة، أو القصة قديمة (أكتر من 3 أيام)، أو مفيش حقيقتين مؤكدتين.
+3ب) فحص الحداثة (مهم جدًا): النهارده ${today}. أحدث العناوين في الجرايد دلوقتي:
+${latest.map((h) => `- [${h.paper}] ${h.title}`).join('\n')}
+لو القصة عن حاجة «جاية» (ماتش، تشكيل، توقعات، استعداد، مؤتمر قبل الماتش) والحاجة دي حصلت خلاص حسب التاريخ أو حسب العناوين الأحدث (فيه نتيجة) → ok=false و reason يبدأ بـ«قديم:». الفيديو لازم يكون صح لحظة نشره.
 4) people: الأسماء الأساسية (لاعب/مدرب/نادي) بالإنجليزي زي ما مكتوبة في ويكيبيديا، عشان الصور.
 رجّع JSON {"ok":true,"reason":"","facts":[{"fact":"","papers":[""]}],"claim_single":[{"fact":"","paper":""}],"conflicts":[""],"people":[{"ar":"","en":""}],"next_match":{"name":"","when":""}|null}`, { temp: 0.1, fast: true });
   if (!r.ok || (r.facts || []).length < 2) { log(`⊘ «${story.topic}»: ${r.reason || 'حقايق مش كفاية'}`); return null; }
