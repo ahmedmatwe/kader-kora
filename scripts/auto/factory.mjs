@@ -38,6 +38,7 @@ log('🔎 بدوّر على أقوى تريند في الجرايد الكبير
 const story = await pickStory({ recent, log, request: req?.text });
 if (req) { req.status = story ? 'done' : 'not-found'; req.at2 = new Date().toISOString(); writeJson(path.join(ROOT, 'data/requests.json'), requests); if (!story) await tell(`🔎 الموضوع اللي طلبته «${req.text}» ما لقيتهوش في جريدتين كبار — مش هعمله عشان المصداقية.`); }
 if (!story) await done('no-story');
+if (!DRY) await tell(`🎬 بدأت في فيديو جديد:\n«${story.topic}»\n📰 ${new Set(story.sources.map((x) => x.paper)).size} جرايد · ${new Date().toLocaleTimeString('ar-EG', { timeZone: 'Africa/Cairo', hour: 'numeric', minute: '2-digit' })}\nهبعتلك الفيديو أول ما يجهز.`);
 
 // 2) هوك → سيناريو → مراجعة مستقلة
 const hk = await hooks(story); if (!hk.best) await done('no-hook', { topic: story.topic });
@@ -64,7 +65,6 @@ const num = String(Math.max(1, ...used) + 1).padStart(2, '0');
 const slug = (story.slug || 'news').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30) || 'news';
 const id = `${num}-${slug}`; const dir = path.join(ROOT, 'videos', id); fs.mkdirSync(path.join(dir, 'final'), { recursive: true });
 Object.assign(cur, { topic: story.topic, id }); log(`🎬 ${id}: ${story.topic}`); globalThis.__vid = id;
-if (!DRY) await tell(`🎬 بدأت فيديو جديد:\n«${story.topic}»\n(${new Set(story.sources.map((x) => x.paper)).size} جرايد)`);
 writeJson(path.join(dir, 'story.json'), { ...story, hooks: hk.all, scriptReview: rv.issues || [] });
 fs.writeFileSync(path.join(dir, 'sources.md'), `# ${story.topic}\n\n## الحقايق المؤكدة\n${factsText(story)}\n\n## المصادر\n${story.sources.map((s) => `- ${s.paper}: ${s.title} — ${s.url} (${s.date || ''})`).join('\n')}\n`);
 writeJson(path.join(dir, 'script.json'), { version: 2, lines: sc.lines });
