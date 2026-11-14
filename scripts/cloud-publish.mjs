@@ -4,6 +4,8 @@
 import fs from 'node:fs'; import path from 'node:path'; import { execFileSync } from 'node:child_process';
 import { ROOT, readJson, writeJson, addPost } from './lib.mjs';
 import * as meta from './meta.mjs';
+import { alreadyOut, persist, sameNews } from './guard.mjs';
+import { tell as tellOwner } from './auto/notify.mjs';
 const qdir = path.join(ROOT, 'queue'); let changed = false;
 // استضافة عامة لفيديو إنستجرام (ريبو ahmedmatwe/kader-kora-media) — محتاج MEDIA_TOKEN؛ من غيره بيرجع للرفع المباشر
 const MEDIA = 'ahmedmatwe/kader-kora-media';
@@ -22,11 +24,30 @@ for (const f of fs.existsSync(qdir) ? fs.readdirSync(qdir).filter((x) => x.endsW
   if (!t.approved || !t.approvedBy) { console.log(`⏸ ${t.id}: مش متوافق عليه — متجاهل`); continue; }
   const vdir = path.join(ROOT, 'videos', t.id); fs.mkdirSync(path.join(vdir, 'final'), { recursive: true });
   for (const [plat, job] of Object.entries(t.platforms)) {
+    // 🔒 حارس النشر: حجز قديم ما اتقفلش (الرفع وقع بعد النشر) → نتأكد من المنصة نفسها بدل ما ننشر تاني
+    if (job.status === 'publishing') {
+      const pk = readJson(path.join(vdir, 'publish.json'), null);
+      const hit = pk && await alreadyOut(plat, pk).catch((e) => (console.log(`🔒 ${t.id}/${plat}: المنصة ما ردّتش (${e.message}) — مش هنشر`), 'unknown'));
+      if (hit === 'unknown') continue;
+      if (hit) { Object.assign(job, { status: plat === 'youtube' ? 'scheduled' : 'published', id: hit.id, url: hit.url, doneAt: new Date().toISOString(), guard: 'لقيته منشور على المنصة' }); console.log(`🔒 ${t.id}/${plat}: كان اتنشر فعلًا ${hit.url} — اتسجّل ومش هيتنشر تاني`); changed = true; continue; }
+      if (Date.now() - new Date(job.claimAt) < 40 * 60e3) { console.log(`🔒 ${t.id}/${plat}: لسه بيتنشر من دورة تانية`); continue; }
+      job.status = 'retry';
+    }
     if (job.status && job.status !== 'pending' && job.status !== 'retry') continue;
     const connected = plat === 'youtube' || ((plat === 'facebook' || plat === 'instagram') && process.env.META_PAGE_TOKEN);
     if (!connected) { console.log(`… ${t.id}/${plat}: المنصة لسه مش متربطة على السحابة`); continue; }
     // فيس وإنستا مالهمش جدولة في الـAPI بتاعنا → بننشر لما الميعاد ييجي (المهمة بتصحى كل نص ساعة)
     if (plat !== 'youtube' && job.at && new Date(job.at) > new Date()) { console.log(`⏳ ${t.id}/${plat}: ميعاده ${job.at}`); continue; }
+    // 🔒 حارس النشر: (1) المنصة نفسها — منشور قبل كده؟ (2) حجز مرفوع للريبو قبل النشر، ولو ما اترفعش ما ننشرش
+    {
+      const pk = readJson(path.join(vdir, 'publish.json'), null); if (!pk?.[plat]) { console.log(`⊘ ${t.id}/${plat}: مفيش publish.json`); continue; }
+      let hit; try { hit = await alreadyOut(plat, pk); } catch (e) { console.log(`🔒 ${t.id}/${plat}: ما قدرتش أتأكد من المنصة (${e.message}) — مش هنشر المرة دي`); continue; }
+      if (hit) { Object.assign(job, { status: plat === 'youtube' ? 'scheduled' : 'published', id: hit.id, url: hit.url, doneAt: new Date().toISOString(), guard: 'لقيته منشور على المنصة' }); console.log(`🔒 ${t.id}/${plat}: منشور قبل كده ${hit.url} — مش هيتنشر تاني`); writeJson(p, t); persist(`حارس النشر: ${t.id}/${plat} منشور قبل كده`); changed = true; continue; }
+      if (t.kind !== 'denial') { const d = await sameNews(t, pk, readJson(path.join(ROOT, 'data/posts.json'), [])).catch(() => '');
+        if (d) { for (const j2 of Object.values(t.platforms)) if (['pending', 'retry'].includes(j2.status)) Object.assign(j2, { status: 'cancelled', why: `تكرار خبر: ${d}` }); writeJson(p, t); persist(`حارس النشر: ${t.id} نفس خبر اتنشر`); console.log(`🔒 ${t.id}: نفس خبر اتنشر قبل كده — اتلغى: ${d}`); await tellOwner(`🔒 حارس النشر وقف فيديو مكرر\n«${t.topic}»\nنفس خبر: ${d}`); changed = true; break; } }
+      const prev = job.status; Object.assign(job, { status: 'publishing', claimAt: new Date().toISOString() }); writeJson(p, t);
+      if (!persist(`حارس النشر: حجز ${t.id}/${plat}`)) { job.status = prev; delete job.claimAt; writeJson(p, t); console.log(`🔒 ${t.id}/${plat}: الحجز ما اترفعش — مش هنشر`); continue; }
+    }
     if (plat !== 'youtube') {
       try {
         const pack = readJson(path.join(vdir, 'publish.json'));
@@ -37,7 +58,7 @@ for (const f of fs.existsSync(qdir) ? fs.readdirSync(qdir).filter((x) => x.endsW
         addPost({ platform: plat, video: t.id, id: r.id, url: r.url, publishAt: new Date().toISOString(), title: pack.youtube.title, status: 'published' });
         console.log(`✓ ${t.id}/${plat}: اتنشر ${r.url}`);
       } catch (e) { job.tries = (job.tries || 0) + 1; job.status = job.tries >= 3 ? 'failed' : 'retry'; job.error = String(e.message).slice(-400); console.error(`✗ ${t.id}/${plat}:`, job.error); }
-      changed = true; continue;
+      changed = true; writeJson(p, t); persist(`نشر: ${t.id}/${plat}`); continue;
     }
     try {
       // نزّل ملفات الفيديو من الريليس الخاص
@@ -46,7 +67,7 @@ for (const f of fs.existsSync(qdir) ? fs.readdirSync(qdir).filter((x) => x.endsW
       console.log(out); const url = out.match(/https:\/\/youtube\.com\/shorts\/\S+/)?.[0];
       Object.assign(job, { status: url ? 'scheduled' : 'check', url, doneAt: new Date().toISOString() });
     } catch (e) { job.tries = (job.tries || 0) + 1; job.status = job.tries >= 3 ? 'failed' : 'retry'; job.error = String(e.stderr || e.message).slice(-400); console.error(`✗ ${t.id}/${plat}:`, job.error); }
-    changed = true;
+    changed = true; writeJson(p, t); persist(`نشر: ${t.id}/${plat}`);
   }
   writeJson(p, t);
 }

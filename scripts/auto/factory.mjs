@@ -25,29 +25,37 @@ if (!cfg.enabled) await done('disabled');
 // حد يومي (الكوتة): ما نعملش أكتر من dailyTarget في اليوم
 const today = new Date().toISOString().slice(0, 10);
 const madeToday = flog.runs.filter((r) => r.status === 'queued' && r.at.startsWith(today)).length;
-if (madeToday >= cfg.dailyTarget) await done('daily-target-reached', { madeToday });
+const requests = readJson(path.join(ROOT, 'data/requests.json'), []);
+// فيديو النفي (من فريق متابعة النفي) ليه الأولوية على أي حاجة، وما بيقفش عند الحد اليومي
+const req = requests.find((r) => r.status === 'pending' && r.kind === 'denial') || requests.find((r) => r.status === 'pending');
+const DENIAL = req?.kind === 'denial' ? req : null;
+if (madeToday >= cfg.dailyTarget && !DENIAL) await done('daily-target-reached', { madeToday });
 
 // 1) التريند + التحقيق
 const topics = readJson(path.join(ROOT, 'data/topics.json'), []);
 const recent = topics.filter((t) => Date.now() - new Date(t.at) < 5 * 86400e3).map((t) => t.topic);
+for (const x of readJson(path.join(ROOT, 'data/posts.json'), [])) if (x.title && Date.now() - new Date(x.recordedAt || x.publishAt) < 5 * 86400e3 && !recent.includes(x.title)) recent.push(x.title); // المنشور فعلًا كمان (مش بس سجل المصنع)
 const onErr = async (e) => { if (globalThis.__vid) fs.rmSync(path.join(ROOT, 'videos', globalThis.__vid), { recursive: true, force: true }); if (/429|quota/i.test(String(e?.message))) await done('llm-quota', { error: String(e.message).slice(0, 200) }); console.error(e); await tell(`✗ المصنع وقع: ${String(e?.message || e).slice(0, 300)}`); process.exit(1); };
 process.on('unhandledRejection', onErr); process.on('uncaughtException', onErr);
-const requests = readJson(path.join(ROOT, 'data/requests.json'), []);
-const req = requests.find((r) => r.status === 'pending');
 log('🔎 بدوّر على أقوى تريند في الجرايد الكبيرة');
 const lastQ = [...flog.runs].reverse().find((r) => r.status === 'queued');
 const idleMin = lastQ ? Math.round((Date.now() - new Date(lastQ.at)) / 60000) : 999;
-const story = await pickStory({ recent, log, request: req?.text, idleMin });
+const denied = readJson(path.join(ROOT, 'data/watch.json'), { items: {} }); // الأخبار اللي اتنفت ما تتعملش تاني
+for (const [vid, w] of Object.entries(denied.items || {})) if (w.state === 'denied') { const tp = topics.find((x) => x.id === vid); if (tp) recent.push(tp.topic, w.summary || ''); }
+if (DENIAL) log(`🚨 فيديو نفي/تصحيح لخبر ${DENIAL.corrects}: ${DENIAL.story.denial.summary}`);
+const story = DENIAL ? DENIAL.story : await pickStory({ recent, log, request: req?.text, idleMin });
 if (req) { req.status = story ? 'done' : 'not-found'; req.at2 = new Date().toISOString(); writeJson(path.join(ROOT, 'data/requests.json'), requests); if (!story) await tell(`🔎 الموضوع اللي طلبته «${req.text}» ما لقيتهوش في جريدتين كبار — مش هعمله عشان المصداقية.`); }
 if (!story) await done('no-story');
 if (!DRY) await tell(`🎬 بدأت في فيديو جديد:\n«${story.topic}»\n📰 ${new Set(story.sources.map((x) => x.paper)).size} جرايد · ${new Date().toLocaleTimeString('ar-EG', { timeZone: 'Africa/Cairo', hour: 'numeric', minute: '2-digit' })}\n\nالفيديو عن إيه:\n${(story.facts || []).slice(0, 3).map((f) => `• ${f.fact || f}`).join('\n')}\n\nهبعتلك الفيديو أول ما يجهز.`);
 
+// فيديو النفي: قواعد كتاب خبرة فريق النفي (DENIAL_PLAYBOOK.md)
+const DENIAL_NOTES = DENIAL ? [`ده فيديو نفي/تصحيح: أول جملة هي النفي الرسمي نفسه بوضوح واسم اللي نفى (${story.denial.denier})`, story.denial.wasLive ? `إحنا كنا نشرنا قبل كده «${story.denial.original}» — قولها بصراحة واحترام: الخبر ده طلع غير صحيح والرد الرسمي بيقول كذا` : `الخبر اللي اتداول: «${story.denial.original}» — وضّح إنه اتنفى`, 'ممنوع «كذب/فضيحة/فبركة» وممنوع مهاجمة أي جريدة'] : [];
 // 2) هوك → سيناريو → مراجعة مستقلة
-const hk = await hooks(story); if (!hk.best) await done('no-hook', { topic: story.topic });
+const hk = await hooks(DENIAL ? { ...story, topic: `${story.topic} — الهوك لازم يبدأ بالنفي الرسمي` } : story); if (!hk.best) await done('no-hook', { topic: story.topic });
 log(`🪝 الهوك: ${hk.best}`);
 let sc; let rv; let notes = [];
 for (let a = 0; a < 3; a++) { // سيناريو → مراجعة مستقلة → إعادة كتابة بملاحظات المراجع لحد ما يعدّي
-  const draft = await script(story, hk.best, notes);
+  const draft = await script(story, hk.best, [...DENIAL_NOTES, ...notes]);
   rv = await reviewScript(story, draft);
   if (rv.issues?.length) log(`🔎 مراجعة السيناريو (${a + 1}): ${rv.issues.join(' | ')}`);
   if (rv.dropped) log(`✂️ المراجع شال ${rv.dropped} سطر مالوش سند`);
@@ -174,7 +182,7 @@ const slot = (p) => { // نشر مباشر (cfg.publishNow): دلوقتي على
 // كوتة يوتيوب (~6 رفعات في اليوم): الزيادة تتنشر على فيس وإنستا بس
 const ytToday = queued.filter((q) => q.platforms?.youtube && (q.createdAt || '').startsWith(today)).length;
 const plats = cfg.platforms.filter((p) => p !== 'youtube' || ytToday < (cfg.youtubeDaily ?? 6));
-const ticket = { id, release: rel, topic: story.topic, approved: !!cfg.autoApprove && !qaNotes.length, approvedBy: cfg.autoApprove && !qaNotes.length ? cfg.approvedBy : null, createdAt: new Date().toISOString(), qa: { script: rv.issues || [], frames: qaNotes.length ? qaNotes : 'pass', fixes }, platforms: Object.fromEntries(plats.map((p) => [p, { at: slot(p), status: 'pending' }])) };
+const ticket = { id, release: rel, topic: story.topic, ...(DENIAL ? { kind: 'denial', corrects: DENIAL.corrects } : {}), approved: !!cfg.autoApprove && !qaNotes.length, approvedBy: cfg.autoApprove && !qaNotes.length ? cfg.approvedBy : null, createdAt: new Date().toISOString(), qa: { script: rv.issues || [], frames: qaNotes.length ? qaNotes : 'pass', fixes }, platforms: Object.fromEntries(plats.map((p) => [p, { at: slot(p), status: 'pending' }])) };
 writeJson(path.join(ROOT, 'queue', `${id}.json`), ticket);
 topics.push({ at: new Date().toISOString(), topic: story.topic, id }); writeJson(path.join(ROOT, 'data/topics.json'), topics.slice(-300));
 for (const p of [...photos, ...ctxPhotos]) fs.rmSync(path.join(media, p.file), { force: true });
