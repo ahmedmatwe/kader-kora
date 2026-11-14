@@ -7,7 +7,7 @@ import { ROOT, readJson, writeJson, posts, googleAccess } from './lib.mjs';
 import { metaCreds, guard } from './meta.mjs';
 const DRY = !!process.env.DRY; const MAX = 25; const LOG = path.join(ROOT, 'data/comments.json');
 const log = readJson(LOG, { seen: {}, items: [] });
-import { json } from './auto/ai.mjs';
+import { json, keys } from './auto/ai.mjs';
 // Gemini عن طريق ai.mjs: المفتاح من secret على السحابة أو .env على الماك + تبديل الموديلات لو واحد وقع
 export async function gemini(prompt) { try { return await json(prompt, { light: true, temp: 0.4 }); } catch { return null; } }
 
@@ -62,7 +62,7 @@ async function metaReply(p, id, text, c) { await metaGraph(c, p.platform === 'in
 import { pathToFileURL } from 'node:url';
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();
 async function main() {
-if (!KEY) { console.log('ℹ️ مفيش GEMINI_API_KEY — فريق الردود متوقف'); return; }
+if (!keys().length) { console.log('ℹ️ مفيش GEMINI_API_KEY — فريق الردود متوقف'); return; }
 let H = null; try { H = { authorization: `Bearer ${await googleAccess()}` }; } catch {}
 let meta = null; try { meta = metaCreds(); await guard(meta); } catch (e) { if (meta) console.error(e.message); meta = null; }
 let replied = 0;

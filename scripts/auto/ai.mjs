@@ -26,7 +26,7 @@ async function call(models, parts, gen) {
 /** JSON مضمون (بيعيد لو الرد مش JSON) */
 export async function json(prompt, { light = false, temp = 0.5, fast = false } = {}) {
   for (let i = 0; i < 3; i++) {
-    const p = await call(light ? LIGHT : WRITE, [{ text: prompt }], { responseMimeType: 'application/json', temperature: temp, ...(fast || light ? { thinkingConfig: { thinkingBudget: 0 } } : {}) });
+    const p = await call(light ? LIGHT : WRITE, [{ text: prompt }], { responseMimeType: 'application/json', temperature: temp, ...(fast || light ? { thinkingConfig: { thinkingLevel: 'minimal' } } : {}) });
     try { return JSON.parse(p.map((x) => x.text || '').join('')); } catch {}
   }
   throw new Error('Gemini ما رجّعش JSON سليم');
@@ -34,7 +34,7 @@ export async function json(prompt, { light = false, temp = 0.5, fast = false } =
 /** رؤية: صورة/صور + سؤال → JSON */
 export async function vision(prompt, images) {
   const parts = [{ text: prompt }, ...images.map((f) => ({ inlineData: { mimeType: f.endsWith('.png') ? 'image/png' : 'image/jpeg', data: fs.readFileSync(f).toString('base64') } }))];
-  const p = await call(LIGHT, parts, { responseMimeType: 'application/json', temperature: 0.1, thinkingConfig: { thinkingBudget: 0 } });
+  const p = await call(LIGHT, parts, { responseMimeType: 'application/json', temperature: 0.1, thinkingConfig: { thinkingLevel: 'minimal' } });
   return JSON.parse(p.map((x) => x.text || '').join(''));
 }
 /** تفريغ صوت (مراجعة إن الصوت قال النص بالظبط) */

@@ -7,8 +7,8 @@ export const TrendBar: React.FC<{ text: string }> = ({ text }) => {
   const p = useIn(2);
   return (
     <div style={{ position: 'absolute', top: SAFE.top + 92, right: SAFE.right, left: SAFE.left, display: 'flex', justifyContent: 'flex-start', direction: 'rtl', transform: `translateX(${(1 - p) * 300}px)`, opacity: p }}>
-      <div style={{ ...ar, background: C.red, fontWeight: 900, fontSize: 38, padding: '8px 26px', borderRadius: '14px 0 0 14px' }}>تريند</div>
-      <div style={{ ...ar, background: 'rgba(10,20,48,0.85)', fontWeight: 700, fontSize: 38, padding: '8px 26px', borderRadius: '0 14px 14px 0', border: `2px solid ${C.red}` }}>{text}</div>
+      <div style={{ ...ar, background: C.red, fontWeight: 900, fontSize: 38, padding: '8px 26px', borderRadius: '14px 0 0 14px', whiteSpace: 'nowrap', flexShrink: 0 }}>تريند</div>
+      <div style={{ ...ar, background: 'rgba(10,20,48,0.85)', fontWeight: 700, fontSize: 38, padding: '8px 26px', borderRadius: '0 14px 14px 0', border: `2px solid ${C.red}`, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flexShrink: 1 }}>{text}</div>
     </div>
   );
 };
