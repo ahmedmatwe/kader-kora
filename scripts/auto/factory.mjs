@@ -36,9 +36,11 @@ log(`🪝 الهوك: ${hk.best}`);
 let sc = await script(story, hk.best);
 const rv = await reviewScript(story, sc);
 if (rv.issues?.length) log(`🔎 مراجعة السيناريو: ${rv.issues.join(' | ')}`);
-if (rv.fixed_lines?.length >= 5) sc = { lines: rv.fixed_lines };
+if (rv.dropped) log(`✂️ المراجع شال ${rv.dropped} سطر مالوش سند`);
+if (!rv.hookOk) done('hook-unsupported', { topic: story.topic, issues: rv.issues });
+sc = { lines: rv.lines.map(({ support, ...l }) => l) };
 const nWords = sc.lines.map((l) => l.vo).join(' ').split(/\s+/).length;
-if (nWords < 70 || nWords > 145 || sc.lines.at(-1).id !== 'outro') done('script-shape', { topic: story.topic, nWords });
+if (sc.lines.length < 5 || nWords < 60 || nWords > 145 || sc.lines.at(-1).id !== 'outro') done('script-shape', { topic: story.topic, nWords });
 for (const l of sc.lines) l.hi = (l.hi || []).filter((h) => h && l.vo.includes(h));
 
 // 3) رقم الفيديو + الفولدر
