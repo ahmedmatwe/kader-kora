@@ -7,14 +7,24 @@ const UA = { 'user-agent': 'KaderKoraBot/1.0 (shorts studio; contact via GitHub)
 const OK_LIC = /^(CC BY(-SA)? [234]\.0|CC0|Public domain|PD)/i;
 const strip = (s) => String(s || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
 
+// الاسم الكامل لازم يكون في اسم الملف ككلمة مستقلة، ومش جزء من اسم أطول («Nabil Ali Maher» مش «Ali Maher»)
+// أو الملف متصنّف في أرشيف الشخص نفسه (Category) وفيه اسم عيلته
+export function nameMatch(c, en) {
+  const t = c.title.replace(/^File:/i, '').replace(/[_]/g, ' '); const last = en.split(' ').pop();
+  if (c.fromCat) return new RegExp(`\\b${last}\\b`, 'i').test(t);
+  const m = t.match(new RegExp(`(^|[^A-Za-z])(${en.replace(/\s+/g, '[ _-]+')})(?![A-Za-z])`, 'i'));
+  if (!m) return false;
+  const before = t.slice(0, m.index + m[1].length).trim().split(/[\s,(]+/).pop() || '';
+  return !/^[A-Z][a-z]+$/.test(before); // كلمة باسم قبله = اسم شخص تاني
+}
 async function candidates(q) {
   // أرشيف اللاعب نفسه (Category) + البحث العادي
   const tail = '&prop=imageinfo&iiprop=url|size|extmetadata|mime&iiurlwidth=1280';
   const urls = [`${API}?action=query&format=json&generator=categorymembers&gcmtitle=${encodeURIComponent(`Category:${q}`)}&gcmtype=file&gcmlimit=50${tail}`, `${API}?action=query&format=json&generator=search&gsrnamespace=6&gsrlimit=20&gsrsearch=${encodeURIComponent(`"${q}" filetype:bitmap`)}${tail}`];
-  const pages = {}; for (const u of urls) { const j = await (await fetch(u, { headers: UA })).json().catch(() => ({})); Object.assign(pages, j.query?.pages || {}); }
+  const pages = {}; for (const [ui, u] of urls.entries()) { const j = await (await fetch(u, { headers: UA })).json().catch(() => ({})); for (const [k, v] of Object.entries(j.query?.pages || {})) pages[k] = { ...v, fromCat: pages[k]?.fromCat || ui === 0 }; }
   return Object.values(pages).map((p) => {
     const i = p.imageinfo?.[0] || {}; const m = i.extmetadata || {};
-    return { title: p.title, url: i.thumburl || i.url, w: i.width, h: i.height, mime: i.mime, license: strip(m.LicenseShortName?.value), artist: strip(m.Artist?.value).slice(0, 60), date: strip(m.DateTimeOriginal?.value || m.DateTime?.value), page: i.descriptionurl };
+    return { fromCat: !!p.fromCat, title: p.title, url: i.thumburl || i.url, w: i.width, h: i.height, mime: i.mime, license: strip(m.LicenseShortName?.value), artist: strip(m.Artist?.value).slice(0, 60), date: strip(m.DateTimeOriginal?.value || m.DateTime?.value), page: i.descriptionurl };
   }).filter((c) => c.url && /jpeg|png/.test(c.mime) && c.w >= 700 && OK_LIC.test(c.license) && c.artist);
 }
 
@@ -22,7 +32,7 @@ async function candidates(q) {
 export async function findPhoto(people, slug, dest, log = console.log) {
   for (const p of (people || []).slice(0, 2)) {
     const list = (await candidates(p.en)).filter((c) => !/logo|kit|stadium map|signature|svg|c[ée]l[ée]bration|team|squad|lineup|crowd|demonstration|DPLA|church|ship/i.test(c.title))
-      .filter((c) => { const last = p.en.split(' ').pop().toLowerCase(); return last.length >= 3 && c.title.toLowerCase().includes(last); })
+      .filter((c) => nameMatch(c, p.en))
       .sort((a, b) => Number(b.title.toLowerCase().includes(p.en.split(' ').pop().toLowerCase())) - Number(a.title.toLowerCase().includes(p.en.split(' ').pop().toLowerCase())) || b.w - a.w).slice(0, 3);
     for (const c of list) {
       const tmp = path.join(dest, `${slug}-cand.jpg`);
