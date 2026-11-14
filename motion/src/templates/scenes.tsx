@@ -173,19 +173,91 @@ export const VerdictScene: React.FC<{ title: string; yes: { cond: string; res: s
 };
 
 /** الخاتمة: الماتش الجاي + سؤال الكومنتات */
-export const EndScene: React.FC<{ next: string; when: string; cta: string }> = ({ next, when, cta }) => {
+export const EndScene: React.FC<{ next?: string; when?: string; cta: string }> = ({ next, when, cta }) => {
   const p = useIn(0); const q = useIn(26);
   return (
     <AbsoluteFill>
       <BrandBg />
       <div style={{ position: 'absolute', top: 480, left: SAFE.left, right: SAFE.right, textAlign: 'center', opacity: p, transform: `scale(${0.8 + 0.2 * p})` }}>
-        <div style={{ ...ar, fontSize: 46, fontWeight: 700, color: C.mute }}>الماتش الجاي</div>
+        {next && <div style={{ ...ar, fontSize: 46, fontWeight: 700, color: C.mute }}>الماتش الجاي</div>}
         <div style={{ ...ar, fontSize: 84, fontWeight: 900 }}>{next}</div>
         <div style={{ ...ar, fontSize: 56, fontWeight: 800, color: C.gold }}>{when}</div>
       </div>
       <div style={{ position: 'absolute', top: 930, left: SAFE.left, right: SAFE.right, textAlign: 'center', opacity: q }}>
         <div style={{ display: 'inline-block', ...ar, fontSize: 56, fontWeight: 900, background: C.red, padding: '18px 36px', borderRadius: 24 }}>{cta}</div>
       </div>
+    </AbsoluteFill>
+  );
+};
+
+/** تصريح: مين قال + الجملة بين علامات تنصيص (من الجرايد بس) */
+export const QuoteScene: React.FC<{ who: string; role?: string; text: string; src?: string }> = ({ who, role, text, src }) => {
+  const p = useIn(0); const q = useIn(10);
+  return (
+    <AbsoluteFill>
+      <BrandBg />
+      <div style={{ position: 'absolute', top: 470, left: SAFE.left, right: SAFE.right, textAlign: 'center', opacity: p }}>
+        <div style={{ ...ar, fontSize: 64, fontWeight: 900 }}>{who}</div>
+        {role && <div style={{ ...ar, fontSize: 40, fontWeight: 700, color: C.mute }}>{role}</div>}
+      </div>
+      <div style={{ position: 'absolute', top: 700, left: SAFE.left, right: SAFE.right, display: 'flex', justifyContent: 'center', opacity: q, transform: `translateY(${(1 - q) * 30}px)` }}>
+        <div style={{ ...ar, fontSize: 58, fontWeight: 800, lineHeight: 1.45, textAlign: 'center', background: 'rgba(255,255,255,0.08)', borderRight: `10px solid ${C.gold}`, borderRadius: 24, padding: '34px 40px' }}>
+          <span style={{ color: C.gold, fontSize: 90, lineHeight: 0 }}>«</span>{text}<span style={{ color: C.gold, fontSize: 90, lineHeight: 0 }}>»</span>
+        </div>
+      </div>
+      {src && <div style={{ position: 'absolute', top: 1180, left: SAFE.left, right: SAFE.right, textAlign: 'center', ...ar, fontSize: 36, fontWeight: 700, color: C.mute, opacity: useIn(24) }}>{src}</div>}
+    </AbsoluteFill>
+  );
+};
+
+/** رقم كبير بيعد لحد قيمته + وصفه */
+export const StatScene: React.FC<{ value: number; prefix?: string; suffix?: string; label: string; note?: string; frames: number }> = ({ value, prefix = '', suffix = '', label, note, frames }) => {
+  const f = useCurrentFrame(); const p = useIn(0);
+  const n = Math.round(interpolate(f, [4, Math.min(40, frames * 0.5)], [0, value], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: Easing.out(Easing.cubic) }));
+  return (
+    <AbsoluteFill>
+      <BrandBg />
+      <div style={{ position: 'absolute', top: 540, left: SAFE.left, right: SAFE.right, textAlign: 'center', opacity: p, direction: 'rtl' }}>
+        <Num style={{ fontSize: 300, color: C.gold, lineHeight: 1 }}>{`${prefix}${n}${suffix}`}</Num>
+      </div>
+      <div style={{ position: 'absolute', top: 900, left: SAFE.left, right: SAFE.right, textAlign: 'center', ...ar, fontSize: 66, fontWeight: 900, opacity: useIn(10) }}>{label}</div>
+      {note && <div style={{ position: 'absolute', top: 1060, left: SAFE.left, right: SAFE.right, textAlign: 'center', ...ar, fontSize: 42, fontWeight: 700, color: C.mute, opacity: useIn(24), whiteSpace: 'pre-line' }}>{note}</div>}
+    </AbsoluteFill>
+  );
+};
+
+/** 2-4 نقاط بتظهر ورا بعض */
+export const ListScene: React.FC<{ title: string; items: string[]; frames: number }> = ({ title, items, frames }) => {
+  const step = Math.max(8, Math.min(24, Math.floor((frames - 20) / Math.max(1, items.length))));
+  return (
+    <AbsoluteFill>
+      <BrandBg />
+      <Title text={title} top={460} size={70} />
+      <div style={{ position: 'absolute', top: 650, left: SAFE.left, right: SAFE.right, display: 'flex', flexDirection: 'column', gap: 30 }}>
+        {items.slice(0, 4).map((t, i) => <ListRow key={i} text={t} n={i + 1} delay={10 + i * step} />)}
+      </div>
+    </AbsoluteFill>
+  );
+};
+const ListRow: React.FC<{ text: string; n: number; delay: number }> = ({ text, n, delay }) => {
+  const p = useIn(delay);
+  return (
+    <div style={{ display: 'flex', direction: 'rtl', alignItems: 'center', gap: 24, opacity: p, transform: `translateX(${(1 - p) * -80}px)` }}>
+      <div style={{ minWidth: 84, height: 84, borderRadius: 42, background: C.red, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Num style={{ fontSize: 50 }}>{String(n)}</Num></div>
+      <div style={{ ...ar, fontSize: 50, fontWeight: 800, lineHeight: 1.3, background: 'rgba(255,255,255,0.08)', borderRadius: 18, padding: '14px 26px', flex: 1 }}>{text}</div>
+    </div>
+  );
+};
+
+/** عنوان كبير (خبر عاجل/مفاجأة) + سطر شرح */
+export const HeadlineScene: React.FC<{ kicker?: string; title: string; accent?: string; sub?: string }> = ({ kicker, title, accent, sub }) => {
+  const p = useIn(0);
+  return (
+    <AbsoluteFill>
+      <BrandBg />
+      {kicker && <div style={{ position: 'absolute', top: 500, left: SAFE.left, right: SAFE.right, textAlign: 'center', opacity: p }}><span style={{ ...ar, fontSize: 46, fontWeight: 900, background: C.red, padding: '8px 28px', borderRadius: 14 }}>{kicker}</span></div>}
+      <Title text={title} accent={accent} top={640} size={92} delay={4} />
+      {sub && <div style={{ position: 'absolute', top: 1040, left: SAFE.left, right: SAFE.right, textAlign: 'center', ...ar, fontSize: 46, fontWeight: 700, color: C.mute, opacity: useIn(18), whiteSpace: 'pre-line', lineHeight: 1.4 }}>{sub}</div>}
     </AbsoluteFill>
   );
 };

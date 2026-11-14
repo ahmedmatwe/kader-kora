@@ -1,0 +1,79 @@
+// فريق الهوكات + فريق السيناريو + مراجع السيناريو (مستقل) + فريق المشاهد (الموشن).
+import { json } from './ai.mjs';
+
+const factsText = (s) => [
+  ...s.facts.map((f) => `- ${f.fact} (${f.papers.join('، ')})`),
+  ...(s.claim_single || []).map((f) => `- بحسب ${f.paper}: ${f.fact}`),
+  ...(s.conflicts || []).map((c) => `- خلاف بين الجرايد: ${c}`),
+].join('\n');
+export { factsText };
+
+/** فريق الهوكات: 8 افتتاحيات → تقييم → الأقوى */
+export async function hooks(story) {
+  const r = await json(`إنت فريق الهوكات في «كادر كورة» (شورتس كورة مصرية). القصة: ${story.topic}
+الحقايق المؤكدة:\n${factsText(story)}
+اكتب 8 افتتاحيات مختلفة (أول جملة في الفيديو، ≤ 14 كلمة، بالعامية المصرية). أنواع: سؤال، مفارقة، رقم صادم، «محدش واخد باله»، مقارنة. صادقة 100% من الحقايق بس، من غير تهويل أو وعد مش في الفيديو.
+قيّم كل واحدة من 10 في: فضول، وضوح من أول ثانيتين، صدق. رجّع JSON {"hooks":[{"text":"","curiosity":0,"clarity":0,"truth":0}]}`, { temp: 0.9 });
+  const best = (r.hooks || []).filter((h) => h.truth >= 9).sort((a, b) => (b.curiosity + b.clarity) - (a.curiosity + a.clarity));
+  return { best: best[0]?.text, all: r.hooks || [] };
+}
+
+const SCRIPT_RULES = `- عامية مصرية طبيعية زي مذيع ستوديو تحليلي، جمل قصيرة، من غير فصحى.
+- الأرقام والسنين مكتوبة بالحروف زي ما بتتنطق (سبعين، ألفين وتلاتاشر، خمسة صفر) — عشان الصوت.
+- 6 لـ 9 سطور، المجموع 85 لـ 125 كلمة (45 ثانية تقريبًا). كل سطر فكرة واحدة.
+- أول سطر = الهوك بالظبط. آخر سطر id="outro": سؤال للكومنتات (ولو فيه ماتش جاي اذكره).
+- أي معلومة من جريدة واحدة لازم «بحسب <الجريدة>». أي خلاف بين الجرايد يتقال إنه خلاف من غير انحياز.
+- ممنوع: معلومة مش في الحقايق، رأي مسيء في حد، «حصري»، «صوت AI»، أسماء مواقع غير الجرايد.
+- hi: كلمة أو اتنين من السطر نفسه (بالظبط زي ما مكتوبة) تتلوّن في الترجمة.`;
+
+/** فريق السيناريو */
+export async function script(story, hook) {
+  return json(`إنت فريق السيناريو في «كادر كورة». القصة: ${story.topic}\nالحقايق:\n${factsText(story)}\nالهوك المختار: ${hook}\n${SCRIPT_RULES}
+رجّع JSON {"lines":[{"id":"hook","vo":"","hi":[""]},{"id":"english_id","vo":"","hi":[]}, ... ,{"id":"outro","vo":"","hi":[]}]}`, { temp: 0.6 });
+}
+
+/** مراجع السيناريو (مستقل): يدوّر على أي غلطة ويصلّحها */
+export async function reviewScript(story, sc) {
+  const r = await json(`إنت مراجع مستقل ومدقق في «كادر كورة». راجع السيناريو ده سطر سطر مقابل الحقايق والقواعد.\nالحقايق:\n${factsText(story)}\nالقواعد:\n${SCRIPT_RULES}\nالسيناريو:\n${JSON.stringify(sc.lines, null, 1)}
+لو فيه أي معلومة مش في الحقايق، أو رقم غلط، أو خلاف اتقدّم كأنه حقيقة، أو كلام مسيء، أو مخالفة للقواعد → صلّحها في fixed_lines (نفس الشكل). لو سليم رجّع نفس السطور.
+رجّع JSON {"issues":["..."],"fixed_lines":[...],"pass":true|false}`, { temp: 0.1 });
+  return r;
+}
+
+const SCENES = `مكتبة المشاهد (type: props) — كل مشهد بيغطي سطر واحد (from=to=id السطر):
+- photo: {src,label,credit,title,accent?,badge?,zoom:"in"|"out",focusX:0-100} ← بس لو فيه صورة متاحة (هتتبعتلك)، وأحسن للسطر الأول.
+- headline: {kicker?:"عاجل|مفاجأة|رسميًا", title, accent?, sub?}
+- score: {home,away,hs:number,as:number,sub:"البطولة\\nاليوم والتاريخ",note?}
+- versus: {title, a:{name,value:number,tag}, b:{name,value:number,tag}, winner:"a"|"b"}
+- claim: {who:"مين قال", value:"رقم كنص", unit, note?}
+- stat: {value:number, prefix?, suffix?, label, note?}
+- quote: {who, role?, text:"تصريح منقول بالحرف من الحقايق", src:"المصدر: <الجريدة>"}
+- list: {title, items:[2-4 نقط قصيرة ≤ 28 حرف]}
+- flashback: {from_year:number,to_year:number,title,detail}
+- verdict: {title:"الخلاصة", yes:{n,cond,res}, no:{n,cond,res}} ← للجدل/الخلاف بس
+- end: {next?:"الماتش الجاي" , when?:"امتى", cta:"سؤال قصير للكومنتات"} ← آخر مشهد دايمًا (from=to="outro")
+تنويع (مهم): اخلط بين اللقطات الحقيقية (photo) والموشن جرافيك — لو فيه صور متاحة استخدم كل صورة مرة واحدة، وحطها متفرقة (صورة ← موشن ← صورة ← موشن)، وأول مشهد صورة لو متاحة. لكل صورة title قصير مختلف عن اللي قبله.\nقواعد: كل النصوص على الشاشة قصيرة (العنوان ≤ 26 حرف، السطر ≤ 30 حرف)، عامية مصرية، من الحقايق بس، والأرقام أرقام (70 مش سبعين). نوّع المشاهد (ما تكررش نفس النوع ورا بعض). trend: 2-4 كلمات. keep: أسماء من كلمتين أو أكتر لازم ما تتقسمش في الترجمة.`;
+
+/** فريق المشاهد (موشن جرافيك) */
+export async function scenes(story, lines, photo) {
+  const r = await json(`إنت فريق الموشن جرافيك في «كادر كورة». حوّل السيناريو لمشاهد من المكتبة.\n${SCENES}
+الحقايق:\n${factsText(story)}\nالسيناريو:\n${JSON.stringify(lines)}\nالصور المتاحة (لقطات حقيقية مرخصة): ${photo?.length ? JSON.stringify(photo) : 'مفيش — ما تستخدمش photo'}
+رجّع JSON {"trend":"","keep":[""],"scenes":[{"type":"","from":"id","to":"id", ...props}]}`, { temp: 0.4 });
+  return r;
+}
+
+const REQ = { photo: ['src', 'label', 'credit'], headline: ['title'], score: ['home', 'away', 'hs', 'as', 'sub'], versus: ['title', 'a', 'b'], claim: ['who', 'value', 'unit'], stat: ['value', 'label'], quote: ['who', 'text'], list: ['title', 'items'], flashback: ['from_year', 'to_year', 'title', 'detail'], verdict: ['title', 'yes', 'no'], end: ['cta'] };
+/** فحص آلي للمشاهد: الأنواع والـprops وتغطية كل السطور */
+export function checkScenes(sc, lines) {
+  const ids = lines.map((l) => l.id); const errs = [];
+  for (const s of sc.scenes || []) {
+    if (!REQ[s.type]) errs.push(`نوع مش معروف ${s.type}`);
+    else for (const k of REQ[s.type]) if (s[k] == null || s[k] === '') errs.push(`${s.type} ناقصه ${k}`);
+    if (!ids.includes(s.from) || !ids.includes(s.to)) errs.push(`${s.type}: from/to مش موجودين`);
+    for (const k of ['title', 'label', 'text']) if (typeof s[k] === 'string' && s[k].length > (k === 'text' ? 90 : 34)) errs.push(`${s.type}.${k} طويل`);
+  }
+  const covered = new Set(); for (const s of sc.scenes || []) { const a = ids.indexOf(s.from), b = ids.indexOf(s.to); for (let i = a; i <= b; i++) covered.add(ids[i]); }
+  for (const id of ids) if (!covered.has(id)) errs.push(`السطر ${id} مالوش مشهد`);
+  if (sc.scenes?.at(-1)?.type !== 'end') errs.push('آخر مشهد لازم end');
+  return errs;
+}

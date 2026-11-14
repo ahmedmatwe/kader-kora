@@ -1,6 +1,6 @@
 # يبني voice.wav (كل السطور + فواصل) و plan.json (أوقات المشاهد + الترجمة) من script.json + scenes.json
 import json, subprocess, sys, os
-d = sys.argv[1]; FF = '/opt/homebrew/opt/ffmpeg-full/bin/'
+d = sys.argv[1]; FF = '/opt/homebrew/opt/ffmpeg-full/bin/' if os.path.exists('/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg') else ''
 lines = json.load(open(f'{d}/script.json'))['lines']; scenes = json.load(open(f'{d}/scenes.json'))
 GAP, LEAD, TAIL = 0.22, 0.2, 1.4
 dur = lambda f: float(subprocess.check_output([FF + 'ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', f]))
@@ -19,7 +19,7 @@ subprocess.run([FF + 'ffmpeg', '-loglevel', 'error', '-y', *inputs, '-filter_com
 caps = []
 for l in lines:
     s, e = times[l['id']]; vo = l['vo'].replace('..', '،')
-    for nm in ['ترانسفير ماركت', 'حسام حسن', 'بوب برادلي', 'صدى البلد', 'أمم إفريقيا', 'التسعة وستين', 'تمانية وستين', 'خمسة صفر', 'ألفين وتلاتاشر', 'عشر تغييرات', 'جون يعادل', 'الهداف التاريخي']:
+    for nm in scenes.get('keep', []) + ['ترانسفير ماركت', 'حسام حسن', 'بوب برادلي', 'صدى البلد', 'أمم إفريقيا', 'التسعة وستين', 'تمانية وستين', 'خمسة صفر', 'ألفين وتلاتاشر', 'عشر تغييرات', 'جون يعادل', 'الهداف التاريخي']:
         vo = vo.replace(nm, nm.replace(' ', '\u00a0'))
     words = vo.split(' '); chunks = []; cur = []
     for w in words:

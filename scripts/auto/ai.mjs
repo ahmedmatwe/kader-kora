@@ -1,6 +1,6 @@
 // Gemini: نص/JSON/صوت/رؤية. المفتاح GEMINI_API_KEY (على السحابة secret، على الماك من .env بتاع سر البراند).
 import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path';
-function key() {
+export function key() {
   if (process.env.GEMINI_API_KEY) return process.env.GEMINI_API_KEY.split(',')[0].trim();
   const f = path.join(os.homedir(), 'Desktop/youtube-ai-studio/.env');
   const l = fs.existsSync(f) && fs.readFileSync(f, 'utf8').split('\n').find((x) => x.startsWith('GEMINI_API_KEY='));
