@@ -40,6 +40,12 @@ jobs:
           git config user.name "kader-kora-bot"; git config user.email "bot@users.noreply.github.com"
           git add queue data videos || true
           git diff --cached --quiet || (git commit -qm "المصنع: دورة إنتاج" && git pull -q --rebase && git push -q)
+      - name: نشر مباشر (لو اتعمل فيديو)
+        if: always()
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          S=$(node -e "const f=require('fs').existsSync('data/factory.json')?require('./data/factory.json'):{runs:[]};console.log((f.runs.at(-1)||{}).status||'')")
+          if [ "$S" = queued ]; then gh workflow run publish.yml; fi
       - name: معاينة (3 أيام)
         if: always()
         uses: actions/upload-artifact@v4

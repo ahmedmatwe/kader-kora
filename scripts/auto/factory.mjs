@@ -161,12 +161,13 @@ const rel = `v-${id}`;
 execFileSync('gh', ['release', 'create', rel, social, yt, path.join(dir, 'final', `${id}-cover.jpg`), path.join(dir, 'final', `${id}.ar.srt`), '--title', id, '--notes', story.topic], { cwd: ROOT, stdio: 'inherit' });
 const sched = JSON.parse(execFileSync('node', [path.join(ROOT, 'scripts/schedule.mjs'), '--type', story.type || 'news'], { encoding: 'utf8' }).trim().split('\n').pop());
 const queued = fs.readdirSync(path.join(ROOT, 'queue')).filter((x) => x.endsWith('.json')).map((x) => readJson(path.join(ROOT, 'queue', x)));
-const slot = (p) => { // ما نحطش فيديوهين على نفس المنصة في أقل من 50 دقيقة، ومن غير ساعات النوم
-  let at = new Date(sched[p]).getTime();
+const slot = (p) => { // نشر مباشر (cfg.publishNow): دلوقتي على طول — بس مش فيديوهين على نفس المنصة في أقل من 20 دقيقة
+  const now = !!cfg.publishNow; let at = now ? Date.now() : new Date(sched[p]).getTime();
   for (let i = 0; i < 80; i++) {
     const h = cairoHour(new Date(at).toISOString());
-    const clash = queued.some((q) => q.platforms?.[p]?.at && Math.abs(new Date(q.platforms[p].at) - at) < 50 * 60e3);
-    if (!clash && !(h >= 1 && h < 10)) break; at += 30 * 60e3;
+    const live = queued.filter((q) => q.platforms?.[p]?.status !== 'cancelled');
+    const clash = live.some((q) => q.platforms?.[p]?.at && Math.abs(new Date(q.platforms[p].at) - at) < (now ? 20 : 50) * 60e3);
+    if (!clash && (now || !(h >= 1 && h < 10))) break; at += (now ? 10 : 30) * 60e3;
   }
   return new Date(at).toISOString();
 };
