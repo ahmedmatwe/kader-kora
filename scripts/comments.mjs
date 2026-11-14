@@ -7,23 +7,32 @@ import { ROOT, readJson, writeJson, posts, googleAccess } from './lib.mjs';
 import { metaCreds, guard } from './meta.mjs';
 const DRY = !!process.env.DRY; const MAX = 25; const LOG = path.join(ROOT, 'data/comments.json');
 const log = readJson(LOG, { seen: {}, items: [] });
-const KEY = process.env.GEMINI_API_KEY; const MODELS = ['gemini-3.5-flash', 'gemini-flash-latest', 'gemini-3.5-flash-lite'];
+import { json } from './auto/ai.mjs';
+// Gemini عن طريق ai.mjs: المفتاح من secret على السحابة أو .env على الماك + تبديل الموديلات لو واحد وقع
+export async function gemini(prompt) { try { return await json(prompt, { light: true, temp: 0.4 }); } catch { return null; } }
 
-export async function gemini(prompt) {
-  for (const m of MODELS) {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': KEY }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: 'application/json', temperature: 0.4 } }) });
-    const j = await r.json().catch(() => ({})); const t = j.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (t) try { return JSON.parse(t); } catch {}
-  }
-  return null;
-}
-export const RULES = `إنت مسؤول الردود في قناة «كادر كورة» (تريندات كورة مصرية). اكتب بالمصري، قصير (سطر أو اتنين)، محترم ودود، من غير إيموجي كتير.
-- لو الكومنت شتيمة، أو سياسة، أو دين، أو طائفية، أو اتهام لحد، أو تنمر، أو سبام/لينكات، أو بيطلب بيانات شخصية → action="ignore".
-- لو سؤال عن معلومة: جاوب من «حقائق الفيديو» بس، واذكر المصدر لو مفيد. لو المعلومة مش موجودة قول إنك هتتابع الموضوع، وما تخترعش.
-- لو اختلاف في الرأي أو الأرقام: احترم رأيه، ووضّح إن فيه أكتر من حسبة من غير ما تنحاز.
-- لو مدح أو تفاعل عادي: اشكره ورد بسؤال خفيف يكمّل النقاش.
-- ممنوع تعد بحاجة، أو تهاجم حد، أو تقول رأي في لاعب أو مدرب بشكل مسيء.
+export const RULES = `إنت مسؤول الردود في قناة «كادر كورة» (تريندات كورة مصرية).
+الأسلوب (أهم حاجة):
+- اكتب بالعامية المصرية بس (زي «تسلم يا غالي»، «عندك حق والله»، «منوّرنا»)، مش فصحى ومش لهجة تانية.
+- بكل لطف وود واحترام، كأنك بترد على صاحبك. سطر أو اتنين بالكتير، وإيموجي واحد بالكتير.
+- ممنوع نهائيًا: أي لفظ خارج أو شتيمة أو كلمة قليلة الذوق، تريقة أو سخرية، تقليل من حد، رد عصبي، أو «ردح» حتى لو الكومنت مستفز.
+- خاطب الشخص باحترام («يا غالي»، «يا صديقي»، «يا كابتن») ومن غير ما تفترض إذا كان راجل ولا ست لو مش واضح.
+إمتى ترد وإمتى تتجاهل:
+- لو الكومنت شتيمة، أو سياسة، أو دين، أو طائفية، أو اتهام لحد، أو تنمر، أو سبام/لينكات، أو بيطلب بيانات شخصية → action="ignore" (ما تردش خالص، أحسن من أي رد).
+- لو سؤال عن معلومة: جاوب من «حقائق الفيديو» بس. لو المعلومة مش موجودة قول بلطف إنك هتتابع الموضوع، وما تخترعش.
+- لو اختلاف في الرأي أو الأرقام: احترم رأيه واشكره، ووضّح بهدوء إن فيه أكتر من حسبة من غير ما تنحاز.
+- لو مدح أو تفاعل عادي: اشكره بود ورد بسؤال خفيف يكمّل النقاش.
+- لو اقتراح أو ملاحظة (موضوع، صوت، شكل): اشكره وقول إنها فكرة حلوة وهتوصل للفريق — من غير «أكيد» ولا «هنعمل» ولا مواعيد.
+- ممنوع تعد بحاجة، أو تهاجم حد، أو تقول رأي مسيء في لاعب أو مدرب أو نادي أو جمهور.
 رجّع JSON: {"action":"reply"|"ignore","category":"question|praise|disagree|abuse|politics|spam|other","reply":"..."}`;
+
+// حارس آلي بعد الموديل: أي رد فيه لفظ خارج/تريقة/لينك أو طويل → ما يتبعتش
+const RUDE = /(يا\s*(حمار|غبي|عبيط|اهبل|أهبل|جزمة|متخلف|حيوان|كلب|واطي|بيئة)|غبي|غباء|عبيط|متخلف|تافه|فاشل|اخرس|إخرس|اسكت|حقير|وسخ|زبالة|قرف|ياض|يا\s*ابن|ابن\s*ال|كس|طيز|شرموط|منيك|خول|عرص|لعنة|ههههه+|🤣|😂{2,}|🖕|https?:|www\.|@\w)/i;
+export function safeReply(t) {
+  t = (t || '').trim();
+  if (t.length < 2 || t.length > 220 || RUDE.test(t)) return '';
+  return t;
+}
 
 export async function facts(video) { const f = path.join(ROOT, 'videos', video, 'sources.md'); return fs.existsSync(f) ? fs.readFileSync(f, 'utf8').slice(0, 3500) : ''; }
 
@@ -66,6 +75,7 @@ for (const p of posts().filter((x) => x.status !== 'private' || new Date(x.publi
     const d = await gemini(`${RULES}\n\nعنوان الفيديو: ${p.title}\nحقائق الفيديو:\n${f}\n\nالكومنت (${p.platform}) من ${c.author}:\n«${c.text}»`);
     if (!d) continue;
     const item = { platform: p.platform, post: p.id, comment: c.id, author: c.author, text: c.text, ...d, at: new Date().toISOString() };
+    if (d.action === 'reply' && !safeReply(d.reply)) { item.blocked = 'safety'; d.action = 'ignore'; }
     if (d.action === 'reply' && d.reply?.trim()) {
       if (DRY) item.dry = true;
       else try { p.platform === 'youtube' ? await youtubeReply(c.id, d.reply, H) : await metaReply(p, c.id, d.reply, meta); replied++; } catch (e) { item.error = e.message; }
