@@ -23,7 +23,11 @@ def main() -> int:
         return 3
     model = WhisperModel(os.environ.get("WHISPER_MODEL", "small"), device="cpu", compute_type="int8",
                          cpu_threads=os.cpu_count() or 4)
-    segments, info = model.transcribe(path, language=lang, word_timestamps=True, beam_size=5,
+    # الصوت بيتقري بـffmpeg (16kHz mono) بدل PyAV — عشان تعارض الإصدارات على السحابة
+    import subprocess, numpy as np
+    raw = subprocess.run(["ffmpeg", "-nostdin", "-loglevel", "error", "-i", path, "-f", "f32le", "-ac", "1", "-ar", "16000", "-"], capture_output=True, check=True).stdout
+    audio = np.frombuffer(raw, np.float32).copy()
+    segments, info = model.transcribe(audio, language=lang, word_timestamps=True, beam_size=5,
                                       vad_filter=False, condition_on_previous_text=False)
     words = []
     for seg in segments:
