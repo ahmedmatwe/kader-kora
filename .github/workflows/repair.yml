@@ -15,9 +15,11 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
+      RUN_SHA: ${{ github.event.workflow_run.head_sha }}
       WF: ${{ github.event.workflow_run.name || 'factory' }}
     steps:
       - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
       - uses: actions/setup-python@v5
@@ -25,7 +27,9 @@ jobs:
       - name: أدوات الفحص
         run: cd motion && npm install --no-audit --no-fund --loglevel=error
       - name: سجل الدورة اللي وقعت
-        run: gh run view "$RUN_ID" --log-failed > /tmp/failed.log 2>/dev/null || gh run view "$RUN_ID" --log | tail -400 > /tmp/failed.log || true
+        run: |
+          [ -n "$RUN_SHA" ] || echo "RUN_SHA=$(gh run view "$RUN_ID" --json headSha -q .headSha)" >> $GITHUB_ENV
+          gh run view "$RUN_ID" --log-failed > /tmp/failed.log 2>/dev/null || gh run view "$RUN_ID" --log | tail -400 > /tmp/failed.log || true
       - name: فريق الإصلاح
         run: node scripts/auto/repair.mjs /tmp/failed.log "$WF"
       - name: رفع الإصلاح + تشغيل المصنع تاني

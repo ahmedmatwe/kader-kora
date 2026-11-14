@@ -35,6 +35,11 @@ const base = [...new Set([...mentioned, ...(wf === 'factory' ? ['scripts/auto/fa
 const imports = base.flatMap((f) => [...fs.readFileSync(path.join(ROOT, f), 'utf8').matchAll(/from '(\.{1,2}\/[^']+)'/g)].map((m) => path.relative(ROOT, path.resolve(path.dirname(path.join(ROOT, f)), m[1])))).filter((f) => ALLOWED.test(f) && fs.existsSync(path.join(ROOT, f)));
 const files = [...new Set([...base, ...imports])].slice(0, 7);
 const playbook = fs.readFileSync(path.join(ROOT, 'REPAIR_PLAYBOOK.md'), 'utf8');
+// الدورة اتعملت على نسخة قديمة؟ نوري الفريق اللي اتغير بعدها (ممكن الغلطة تكون اتصلّحت خلاص)
+const runSha = process.env.RUN_SHA || '';
+let since = '';
+if (runSha) { try { since = execFileSync('git', ['diff', runSha, 'HEAD', '--', ...files], { cwd: ROOT, encoding: 'utf8' }).slice(0, 12000); } catch {} }
+const sinceTxt = since ? `\n===== اللي اتغير في الملفات دي بعد الدورة اللي وقعت (لو الغلطة اتصلّحت هنا خلاص → edits فاضية و diagnosis «اتصلّحت خلاص»):\n${since}\n` : '';
 const src = files.map((f) => `===== ${f}\n${fs.readFileSync(path.join(ROOT, f), 'utf8').slice(0, 60000)}`).join('\n\n');
 
 // 4) الفحوصات بعد أي تعديل
@@ -70,7 +75,7 @@ ${log.slice(-9000)}
 
 ===== الملفات:
 ${src || '(مفيش ملفات ظاهرة في الغلطة)'}
-${feedback ? `\n===== محاولتك اللي فاتت ما عدّتش الفحص:\n${feedback}\n` : ''}
+${sinceTxt}${feedback ? `\n===== محاولتك اللي فاتت ما عدّتش الفحص:\n${feedback}\n` : ''}
 رجّع JSON:
 {"diagnosis":"سطرين بالمصري: الغلطة إيه وسببها","external":false,"confident":true,
  "edits":[{"file":"scripts/auto/x.mjs","find":"نص موجود في الملف بالظبط (سطر أو أكتر، فريد)","replace":"النص الجديد"}]}
@@ -97,8 +102,9 @@ ${feedback ? `\n===== محاولتك اللي فاتت ما عدّتش الفح�
 ${playbook.slice(0, 6000)}
 ===== السجل:\n${log.slice(-4000)}
 ===== الملفات قبل التعديل:\n${src.slice(0, 50000)}
+${sinceTxt}
 ===== التعديل (diff):\n${diff.slice(0, 8000)}
-افحص: (1) بيحل السبب الجذري فعلًا؟ (2) بيستخدم الدوال والمتغيرات صح حسب الملفات (مثلًا دالة لازم تتنادى بـ ()؟ خاصية موجودة فعلًا؟) (3) ما بيقفلش أو يعطّل ميزة بصمت (شرط دايمًا true/false، return بدري، catch بيبلع الغلطة) (4) ما بيكسرش قواعد الكتاب.
+افحص: (1) بيحل السبب الجذري فعلًا؟ (2) بيستخدم الدوال والمتغيرات صح حسب الملفات (مثلًا دالة لازم تتنادى بـ ()؟ خاصية موجودة فعلًا؟) (3) ما بيقفلش أو يعطّل ميزة بصمت (شرط دايمًا true/false، return بدري، catch بيبلع الغلطة) (4) ما بيكسرش قواعد الكتاب. (5) لو الغلطة كانت اتصلّحت خلاص في «اللي اتغير بعد الدورة» → approve=false. (6) ما بيغيّرش سلوك تاني شغال (توقيت، مسارات، جودة صوت).
 رجّع JSON {"approve":true|false,"why":"سطر بالمصري"}`, { temp: 0 }).catch(() => ({ approve: false, why: 'المراجع ما ردّش' }));
     if (!rv.approve) errs = [`المراجع رفض: ${rv.why}`];
   }
