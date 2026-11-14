@@ -11,7 +11,7 @@ export interface Plan { date?: string; duration: number; audio: string; music?: 
 const MAP: Record<string, React.FC<any>> = {
   photo: S.PhotoScene, score: S.ScoreScene, versus: S.VersusScene, claim: S.ClaimScene,
   flashback: S.FlashbackScene, subs: S.SubsScene, verdict: S.VerdictScene, end: S.EndScene,
-  quote: S.QuoteScene, stat: S.StatScene, list: S.ListScene, headline: S.HeadlineScene,
+  quote: S.QuoteScene, stat: S.StatScene, list: S.ListScene, headline: S.HeadlineScene, card: S.CardScene,
 };
 
 const Fade: React.FC<{ frames: number; children: React.ReactNode }> = ({ frames, children }) => {

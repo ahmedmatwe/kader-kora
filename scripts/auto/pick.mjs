@@ -87,8 +87,8 @@ ${arts.map((a, i) => `### [${i}] ${a.paper} — ${a.title} (${a.date || 'تار�
 3ب) فحص الحداثة (مهم جدًا): النهارده ${today}. أحدث العناوين في الجرايد دلوقتي:
 ${latest.map((h) => `- [${h.paper}] ${h.title}`).join('\n')}
 لو القصة عن حاجة «جاية» (ماتش، تشكيل، توقعات، استعداد، مؤتمر قبل الماتش) والحاجة دي حصلت خلاص حسب التاريخ أو حسب العناوين الأحدث (فيه نتيجة) → ok=false و reason يبدأ بـ«قديم:». الفيديو لازم يكون صح لحظة نشره.
-4) people: الأسماء الأساسية (لاعب/مدرب/نادي) بالإنجليزي زي ما مكتوبة في ويكيبيديا، عشان الصور.
-رجّع JSON {"ok":true,"reason":"","facts":[{"fact":"","papers":[""]}],"claim_single":[{"fact":"","paper":""}],"conflicts":[""],"people":[{"ar":"","en":""}],"next_match":{"name":"","when":""}|null}`, { temp: 0.1, fast: true });
+4) people: الأسماء الأساسية (لاعب/مدرب/نادي) بالإنجليزي زي ما مكتوبة في ويكيبيديا، عشان الصور. role: وظيفته الحالية بالعربي من الحقايق بس (≤ 26 حرف، مثلًا «المدير الفني لمنتخب مصر» أو «لاعب الأهلي») — لو مش متأكد سيبها فاضية.
+رجّع JSON {"ok":true,"reason":"","facts":[{"fact":"","papers":[""]}],"claim_single":[{"fact":"","paper":""}],"conflicts":[""],"people":[{"ar":"","en":"","role":""}],"next_match":{"name":"","when":""}|null}`, { temp: 0.1, fast: true });
   if (!r.ok || (r.facts || []).length < 2) { log(`⊘ «${story.topic}»: ${r.reason || 'حقايق مش كفاية'}`); return null; }
   log(`✓ القصة: «${story.topic}» — ${r.facts.length} حقيقة مؤكدة من ${new Set(arts.map((a) => a.paper)).size} جرايد`);
   return { ...story, ...r, sources: arts.map((a) => ({ paper: a.paper, title: a.title, url: a.url, date: a.date })) };

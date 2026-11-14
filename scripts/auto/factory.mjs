@@ -4,7 +4,7 @@
 import fs from 'node:fs'; import path from 'node:path'; import { execFileSync } from 'node:child_process';
 import { ROOT, readJson, writeJson, cairoHour } from '../lib.mjs';
 import { pickStory } from './pick.mjs';
-import { hooks, script, reviewScript, scenes, checkScenes, fixScenes, photoMismatches, mixPhotos, factsText } from './write.mjs';
+import { hooks, script, reviewScript, scenes, checkScenes, fixScenes, photoMismatches, mixPhotos, ensureCards, factsText } from './write.mjs';
 import { findPhotos, findContext, findClips } from './photo.mjs';
 import { voice, QuotaError } from './voice.mjs';
 import { reviewFrames } from './qa.mjs';
@@ -90,6 +90,7 @@ for (let a = 0; a < 3; a++) {
 const swapBad = (x) => { for (const s of photoMismatches(x, sc.lines)) { log(`🖼️ فريق الصور: شلت صورة ${s.person} من «${s.from}» (الكلام مش عنه)`); for (const k of ['src', 'label', 'credit', 'badge', 'zoom', 'focusX', 'person']) delete s[k]; s.type = 'headline'; s.title = s.title || story.topic.slice(0, 26); } errs = checkScenes(x, sc.lines); };
 if (errs.length && errs.every((e) => e.startsWith('صورة '))) swapBad(sn);
 if (errs.length) await done('scenes-failed', { id, errs });
+ensureCards(sn, sc.lines, story.people, photos, log);
 mixPhotos(sn, sc.lines, [...photos, ...ctxPhotos], log, story.topic);
 const papers = [...new Set(story.sources.map((s) => s.paper))];
 const photoList = photos.map((p) => ({ src: p.src, label: p.label, credit: p.credit, focusX: p.focusX, person: p.person }));

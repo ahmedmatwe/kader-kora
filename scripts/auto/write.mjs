@@ -52,6 +52,7 @@ const SCENES = `مكتبة المشاهد (type: props) — كل مشهد بيغ
 - مكس احترافي: أول مشهد لازم يبقى photo لو فيه صورة لشخص مذكور في أول سطر. وأي مشهد موشن (stat/quote/list/headline/score...) لو سطره بيذكر شخص عنده صورة، الموشن بيتعمل فوق صورته تلقائي (bg). يعني نوّع: صورة كاملة ← موشن فوق صورة ← موشن ← صورة.
 - photo: {src,label,credit,title,accent?,badge?,zoom:"in"|"out",focusX:0-100} ← صورة الشخص (person) تظهر بس على سطر بيذكر اسمه صراحة. ممنوع تحط صورة لاعب على كلام عن مدرب أو نتيجة أو ترتيب أو شخص تاني. لو مفيش سطر بيذكره، ما تستخدمش صورته خالص.
 - headline: {kicker?:"عاجل|مفاجأة|رسميًا", title, accent?, sub?}
+- card: {who:"الاسم", role:"وظيفته ≤ 26 حرف", value?:number, label?} ← كارت لاعب/مدرب احترافي — استخدمه مرة واحدة لكل شخص في «أشخاص من غير صورة»، على أول سطر بيذكر اسمه.
 - score: {home,away,hs:number,as:number,sub:"البطولة\\nاليوم والتاريخ",note?}
 - versus: {title, a:{name,value:number,tag}, b:{name,value:number,tag}, winner:"a"|"b"}
 - claim: {who:"مين قال", value:"رقم كنص", unit, note?}
@@ -65,13 +66,14 @@ const SCENES = `مكتبة المشاهد (type: props) — كل مشهد بيغ
 
 /** فريق المشاهد (موشن جرافيك) */
 export async function scenes(story, lines, photo) {
+  const noPhoto = (story.people || []).filter((p) => !(photo || []).some((x) => x.person === p.ar)).map((p) => ({ who: p.ar, role: p.role || '' }));
   const r = await json(`إنت فريق الموشن جرافيك في «كادر كورة». حوّل السيناريو لمشاهد من المكتبة.\n${SCENES}
-الحقايق:\n${factsText(story)}\nالسيناريو:\n${JSON.stringify(lines)}\nالصور المتاحة (لقطات حقيقية مرخصة): ${photo?.length ? JSON.stringify(photo) : 'مفيش — ما تستخدمش photo'}
+الحقايق:\n${factsText(story)}\nالسيناريو:\n${JSON.stringify(lines)}\nالصور المتاحة (لقطات حقيقية مرخصة): ${photo?.length ? JSON.stringify(photo) : 'مفيش — ما تستخدمش photo'}\nأشخاص من غير صورة (استخدم card): ${noPhoto.length ? JSON.stringify(noPhoto) : 'مفيش'}
 رجّع JSON {"trend":"","keep":[""],"scenes":[{"type":"","from":"id","to":"id", ...props}]}`, { temp: 0.4 });
   return r;
 }
 
-const REQ = { photo: ['src', 'label', 'credit'], headline: ['title'], score: ['home', 'away', 'hs', 'as', 'sub'], versus: ['title', 'a', 'b'], claim: ['who', 'value', 'unit'], stat: ['value', 'label'], quote: ['who', 'text'], list: ['title', 'items'], flashback: ['from_year', 'to_year', 'title', 'detail'], verdict: ['title', 'yes', 'no'], end: ['cta'] };
+const REQ = { photo: ['src', 'label', 'credit'], headline: ['title'], card: ['who', 'role'], score: ['home', 'away', 'hs', 'as', 'sub'], versus: ['title', 'a', 'b'], claim: ['who', 'value', 'unit'], stat: ['value', 'label'], quote: ['who', 'text'], list: ['title', 'items'], flashback: ['from_year', 'to_year', 'title', 'detail'], verdict: ['title', 'yes', 'no'], end: ['cta'] };
 /** فحص آلي للمشاهد: الأنواع والـprops وتغطية كل السطور */
 // فريق مراجعة الصور: صورة الشخص لازم تكون على سطر بيذكر اسمه
 const STOP = new Set(['محمد', 'أحمد', 'احمد', 'عبد', 'علي', 'بن', 'أبو', 'ابو', 'الله']);
@@ -114,6 +116,20 @@ export function mixPhotos(sc, lines, photos, log = () => {}, topic = '') {
   if (first && first.type !== 'photo' && first.type !== 'end' && hero && (!first.bg || photos.find((x) => x.src === first.bg)?.ctx)) put(first, hero);
   const n = (sc.scenes || []).filter((s) => s.type === 'photo' || s.bg).length;
   log(`🖼️ المكس: ${n} من ${(sc.scenes || []).length} مشهد فيهم صور حقيقية (${people.length} لأشخاص + ${ctx.filter((x) => !x.video).length} سياق + ${ctx.filter((x) => x.video).length} لقطة فيديو)`);
+  return sc;
+}
+/** كارت لكل شخص مهم مالوش صورة: لو المشاهد ما عملتلوش كارت، أول headline بيذكر اسمه يتحول كارت */
+export function ensureCards(sc, lines, people = [], photos = [], log = () => {}) {
+  const ids = lines.map((l) => l.id);
+  for (const p of people.slice(0, 2)) {
+    if (!p.role || photos.some((x) => x.person === p.ar)) continue;
+    if ((sc.scenes || []).some((s) => s.type === 'card' && nameIn(p.ar, s.who || ''))) continue;
+    const s = (sc.scenes || []).find((s) => s.type === 'headline' && nameIn(p.ar, lines.slice(Math.max(0, ids.indexOf(s.from)), ids.indexOf(s.to) + 1).map((l) => l.vo).join(' ')));
+    if (!s) continue;
+    for (const k of ['kicker', 'title', 'accent', 'sub']) delete s[k];
+    Object.assign(s, { type: 'card', who: p.ar, role: p.role.slice(0, 30) }); log(`🪪 كارت ${p.ar} (مالوش صورة مرخصة)`);
+  }
+  for (const s of sc.scenes || []) if (s.type === 'card' && s.role && s.role.length > 30) s.role = s.role.slice(0, 30);
   return sc;
 }
 export function checkScenes(sc, lines) {

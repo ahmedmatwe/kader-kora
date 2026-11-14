@@ -263,3 +263,40 @@ export const HeadlineScene: React.FC<{ kicker?: string; title: string; accent?: 
     </AbsoluteFill>
   );
 };
+
+/** كارت اللاعب/المدرب: للي مالوش صورة مرخصة — تصميم قنوات رياضية (اسم + وظيفة + رقم) فوق لقطة/صورة سياق */
+const Jersey: React.FC = () => (
+  <svg viewBox="0 0 100 100" width="150" height="150"><path d="M30 14 L42 10 Q50 20 58 10 L70 14 L90 30 L80 44 L72 38 L72 90 L28 90 L28 38 L20 44 L10 30 Z" fill={C.red} stroke={C.white} strokeWidth="3" strokeLinejoin="round" /><path d="M42 10 Q50 20 58 10" fill="none" stroke={C.white} strokeWidth="4" /><rect x="28" y="56" width="44" height="6" fill={C.white} opacity="0.9" /><rect x="28" y="64" width="44" height="6" fill="#111" opacity="0.9" /></svg>
+);
+const Board: React.FC = () => (
+  <svg viewBox="0 0 100 100" width="150" height="150"><rect x="16" y="14" width="68" height="78" rx="8" fill="#1E7A46" stroke={C.white} strokeWidth="3" /><rect x="38" y="8" width="24" height="12" rx="3" fill={C.white} /><line x1="16" y1="53" x2="84" y2="53" stroke={C.white} strokeWidth="2" opacity="0.8" /><circle cx="50" cy="53" r="10" fill="none" stroke={C.white} strokeWidth="2" opacity="0.8" /><circle cx="34" cy="34" r="4" fill={C.gold} /><circle cx="64" cy="30" r="4" fill={C.gold} /><circle cx="50" cy="72" r="4" fill={C.red} /><path d="M34 38 Q46 46 60 33" fill="none" stroke={C.gold} strokeWidth="2.5" strokeDasharray="4 3" /></svg>
+);
+export const CardScene: React.FC<{ who: string; role: string; value?: number | string; label?: string; frames: number }> = ({ who, role, value, label }) => {
+  const f = useCurrentFrame();
+  const p = useIn(0, 16); const pi = useIn(6, 12); const pn = useIn(10); const pr = useIn(16); const ps = useIn(24);
+  const coach = /مدرب|مدير فني|المدير الفني|رئيس|مسؤول/.test(role);
+  const sweep = interpolate(f % 90, [0, 90], [-120, 220]);
+  const v = value == null || value === '' ? null : Number(String(value).replace(/[^0-9.]/g, '')) || null;
+  return (
+    <AbsoluteFill>
+      <BrandBg />
+      <div style={{ position: 'absolute', top: 480, left: 110, right: 220, height: v ? 900 : 700, borderRadius: 44, overflow: 'hidden', background: 'linear-gradient(160deg, rgba(19,38,90,0.88) 0%, rgba(10,20,48,0.92) 100%)', border: '2px solid rgba(255,255,255,0.14)', boxShadow: '0 30px 80px rgba(0,0,0,0.55)', opacity: p, transform: `translateY(${(1 - p) * 120}px) scale(${0.92 + p * 0.08})` }}>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>{[C.red, C.white, '#111'].map((c) => <div key={c} style={{ height: 14, background: c }} />)}</div>
+        <div style={{ position: 'absolute', top: 0, bottom: 0, left: `${sweep}%`, width: 120, background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.10), transparent)', transform: 'skewX(-20deg)' }} />
+        <div style={{ position: 'absolute', top: 90, left: 0, right: 0, display: 'flex', justifyContent: 'center', transform: `scale(${pi})` }}>
+          <div style={{ width: 250, height: 250, borderRadius: '50%', padding: 8, background: `conic-gradient(${C.gold}, ${C.red}, ${C.gold})` }}>
+            <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: C.navy, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{coach ? <Board /> : <Jersey />}</div>
+          </div>
+        </div>
+        <div style={{ position: 'absolute', top: 380, left: 30, right: 30, textAlign: 'center', ...ar, fontSize: who.length > 14 ? 72 : 88, fontWeight: 900, lineHeight: 1.15, opacity: pn, transform: `translateY(${(1 - pn) * 30}px)`, textShadow: '0 6px 24px rgba(0,0,0,0.5)' }}>{who}</div>
+        <div style={{ position: 'absolute', top: 530, left: 0, right: 0, textAlign: 'center', opacity: pr, transform: `scale(${0.8 + pr * 0.2})` }}>
+          <span style={{ ...ar, display: 'inline-block', fontSize: 42, fontWeight: 800, background: C.red, padding: '10px 34px', borderRadius: 999 }}>{role}</span>
+        </div>
+        {v != null && <div style={{ position: 'absolute', top: 650, left: 30, right: 30, textAlign: 'center', opacity: ps }}>
+          <Num style={{ fontSize: 110, color: C.gold, lineHeight: 1.1 }}>{Math.round(v * Math.min(1, ps))}</Num>
+          {label && <div style={{ ...ar, fontSize: 40, fontWeight: 700, color: C.mute, marginTop: 4 }}>{label}</div>}
+        </div>}
+      </div>
+    </AbsoluteFill>
+  );
+};
