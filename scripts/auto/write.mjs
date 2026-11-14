@@ -97,23 +97,23 @@ export function mixPhotos(sc, lines, photos, log = () => {}, topic = '') {
   for (const s of sc.scenes || []) if (s.type === 'photo') used.set(s.src, (used.get(s.src) || 0) + 1);
   const textOf = (s) => { const a = ids.indexOf(s.from), b = ids.indexOf(s.to); return lines.slice(Math.max(0, a), Math.max(a, b) + 1).map((l) => l.vo).join(' '); };
   const least = (arr, not) => arr.filter((x) => x.src !== not).sort((x, y) => (used.get(x.src) || 0) - (used.get(y.src) || 0))[0] || arr[0];
-  const put = (s, p) => { Object.assign(s, { bg: p.src, bgFocusX: p.focusX, bgCredit: p.credit }); if (p.person) s.bgPerson = p.person; else delete s.bgPerson; used.set(p.src, (used.get(p.src) || 0) + 1); };
+  const put = (s, p) => { Object.assign(s, { bg: p.src, bgFocusX: p.focusX, bgCredit: p.credit, bgVideo: !!p.video }); if (p.person) s.bgPerson = p.person; else delete s.bgPerson; used.set(p.src, (used.get(p.src) || 0) + 1); };
   let prev = '';
   for (const s of sc.scenes || []) {
     if (s.type === 'photo' || s.type === 'end') { delete s.bg; prev = s.src || ''; continue; }
     const text = textOf(s);
-    if (s.bg) { const p = photos.find((x) => x.src === s.bg); if (!p || (!p.ctx && !nameIn(p.person, text))) { for (const k of ['bg', 'bgFocusX', 'bgPerson', 'bgCredit']) delete s[k]; } }
+    if (s.bg) { const p = photos.find((x) => x.src === s.bg); if (!p || (!p.ctx && !nameIn(p.person, text))) { for (const k of ['bg', 'bgFocusX', 'bgPerson', 'bgCredit', 'bgVideo']) delete s[k]; } }
     // 1) صورة الشخص اللي السطر بيذكره  2) صورة سياق (منتخب/نادي/استاد) لو السطر بيذكره  3) صورة كورة مصرية عامة
     if (!s.bg) { const p = least(people.filter((x) => nameIn(x.person, text)), prev); if (p) put(s, p); }
     if (!s.bg) { const p = least(ctx.filter((x) => x.re && new RegExp(x.re).test(text)), prev) || least(ctx.filter((x) => !x.re), prev) || least(ctx, prev); if (p) put(s, p); }
-    else { const p = photos.find((x) => x.src === s.bg); s.bgFocusX = p.focusX; s.bgCredit = p.credit; if (p.person) s.bgPerson = p.person; }
+    else { const p = photos.find((x) => x.src === s.bg); s.bgFocusX = p.focusX; s.bgCredit = p.credit; s.bgVideo = !!p.video; if (p.person) s.bgPerson = p.person; }
     prev = s.bg || '';
   }
   // البداية دايمًا بصورة: صورة بطل القصة لو اسمه في العنوان
   const first = (sc.scenes || [])[0]; const hero = people.find((x) => nameIn(x.person, topic));
   if (first && first.type !== 'photo' && first.type !== 'end' && hero && (!first.bg || photos.find((x) => x.src === first.bg)?.ctx)) put(first, hero);
   const n = (sc.scenes || []).filter((s) => s.type === 'photo' || s.bg).length;
-  log(`🖼️ المكس: ${n} من ${(sc.scenes || []).length} مشهد فيهم صور حقيقية (${people.length} لأشخاص + ${ctx.length} سياق)`);
+  log(`🖼️ المكس: ${n} من ${(sc.scenes || []).length} مشهد فيهم صور حقيقية (${people.length} لأشخاص + ${ctx.filter((x) => !x.video).length} سياق + ${ctx.filter((x) => x.video).length} لقطة فيديو)`);
   return sc;
 }
 export function checkScenes(sc, lines) {

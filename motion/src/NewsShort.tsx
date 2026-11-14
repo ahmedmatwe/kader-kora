@@ -31,7 +31,7 @@ export const NewsShort: React.FC<Plan> = (plan) => {
         const frames = Math.max(1, Math.round(sc.end * fps) - from);
         return (
           <Sequence key={i} from={from} durationInFrames={frames}>
-            <BgPhoto.Provider value={sc.type !== 'photo' && typeof sc.bg === 'string' ? { src: sc.bg as string, focusX: sc.bgFocusX as number | undefined, credit: sc.bgCredit as string | undefined } : null}><Fade frames={frames}><Comp {...sc} frames={frames} /></Fade></BgPhoto.Provider>
+            <BgPhoto.Provider value={sc.type !== 'photo' && typeof sc.bg === 'string' ? { src: sc.bg as string, focusX: sc.bgFocusX as number | undefined, credit: sc.bgCredit as string | undefined, video: !!sc.bgVideo } : null}><Fade frames={frames}><Comp {...sc} frames={frames} /></Fade></BgPhoto.Provider>
           </Sequence>
         );
       })}

@@ -5,7 +5,7 @@ import fs from 'node:fs'; import path from 'node:path'; import { execFileSync } 
 import { ROOT, readJson, writeJson, cairoHour } from '../lib.mjs';
 import { pickStory } from './pick.mjs';
 import { hooks, script, reviewScript, scenes, checkScenes, fixScenes, photoMismatches, mixPhotos, factsText } from './write.mjs';
-import { findPhotos, findContext } from './photo.mjs';
+import { findPhotos, findContext, findClips } from './photo.mjs';
 import { voice, QuotaError } from './voice.mjs';
 import { reviewFrames } from './qa.mjs';
 import { makeTitles } from './titles.mjs';
@@ -77,7 +77,8 @@ const media = path.join(ROOT, 'motion/public/media'); fs.mkdirSync(media, { recu
 const photos = await findPhotos(story.people, id, media, log).catch((e) => (log(`⊘ صور: ${e.message}`), []));
 const photo = photos[0] || null;
 // صور السياق (منتخب/نادي/استاد/جمهور) عشان مفيش مشهد يطلع كتابة على خلفية فاضية
-const ctxPhotos = await findContext(story, id, media, log).catch((e) => (log(`⊘ صور السياق: ${e.message}`), []));
+const ctxPhotos = [...await findContext(story, id, media, log).catch((e) => (log(`⊘ صور السياق: ${e.message}`), [])),
+  ...await findClips(id, media, log).catch((e) => (log(`⊘ اللقطات: ${e.message}`), []))];
 let sn; let errs = [];
 for (let a = 0; a < 3; a++) {
   sn = await scenes(story, sc.lines, photos.map((p) => ({ src: p.src, label: p.label, credit: p.credit, focusX: p.focusX, person: p.person })));

@@ -152,6 +152,10 @@ async function openverse(q) {
   return (j.results || []).filter((r) => r.width >= 900 && /^(by|by-sa|cc0|pdm)$/.test(r.license) && r.url && !/\.(svg|gif)$/i.test(r.url))
     .map((r) => ({ title: `OV:${r.title || r.id}`, url: r.url, w: r.width, license: r.license === 'cc0' ? 'CC0' : r.license === 'pdm' ? 'Public domain' : `CC ${r.license.toUpperCase()} ${r.license_version || ''}`.trim(), artist: String(r.creator || 'unknown').slice(0, 60), page: r.foreign_landing_url, src: r.source }));
 }
+async function pixImages(q) {
+  const j = await (await fetch(`https://pixabay.com/api/?key=${pixKey()}&q=${encodeURIComponent(q)}&image_type=photo&per_page=20&safesearch=true`).catch(() => null))?.json().catch(() => ({})) || {};
+  return (j.hits || []).filter((h) => h.imageWidth >= 900 && h.largeImageURL).map((h) => ({ title: `PX:${h.id} ${h.tags}`, url: h.largeImageURL, w: h.imageWidth, license: 'Pixabay License', artist: String(h.user || '').slice(0, 60), page: h.pageURL, src: 'Pixabay' }));
+}
 const GENERIC = ['Cairo International Stadium', 'Association football in Egypt', 'Borg El Arab Stadium'];
 const SKIP_CAT = /women|basketball|handball|volleyball|kits|line-ups|coaches|players|logos|futsal|beach/i;
 async function catFiles(cat, depth = 1) {
@@ -181,6 +185,7 @@ export async function findContext(story, slug, dest, log = console.log, max = 3)
   for (const [tag, cats, re] of plan) {
     let list = []; for (const c of cats) { list = list.concat(await catFiles(c).catch(() => [])); if (list.length > 40) break; }
     for (const q of OV_Q[tag] || []) list = list.concat(await openverse(q).catch(() => []));
+    if (pixKey()) for (const q of (OV_Q[tag] || []).slice(0, 2)) list = list.concat(await pixImages(q).catch(() => []));
     const key = (c) => c.title.replace(/^(OV:)?(File:)?/i, '').replace(/\.\w+$/, '').replace(/[_\s]+/g, ' ').toLowerCase();
     list = [...new Map(list.map((c) => [key(c), c])).values()];
     list = list.filter((c) => !seen.has(key(c)) && !/svg|logo|kit|map|signature|crest|emblem|badge|women|ticket|poster|stamp/i.test(c.title)).sort(() => Math.random() - 0.5).slice(0, 6);
@@ -193,7 +198,43 @@ export async function findContext(story, slug, dest, log = console.log, max = 3)
       if (!v?.match || !v?.modest || !v.football || v.closeup || !v.quality || v.text) { fs.rmSync(tmp, { force: true }); log(`⊘ صورة سياق ${c.title}: ${v?.why || 'مش مناسبة'}`); continue; }
       const file = `${slug}-ctx-${out.length + 1}.jpg`; fs.renameSync(tmp, path.join(dest, file)); got++;
       log(`✓ صورة سياق «${tag}»: ${c.title} (${c.license})`);
-      out.push({ src: `media/${file}`, file, ctx: true, tag, re, credit: `Photo: ${c.artist} / ${c.src ? `${c.src} via Openverse` : 'Wikimedia Commons'} · ${c.license}`, focusX: Math.max(20, Math.min(80, v.focusX ?? 50)), page: c.page, abs: path.join(dest, file) });
+      out.push({ src: `media/${file}`, file, ctx: true, tag, re, credit: `Photo: ${c.artist} / ${c.src === 'Pixabay' ? 'Pixabay' : c.src ? `${c.src} via Openverse` : 'Wikimedia Commons'} · ${c.license}`, focusX: Math.max(20, Math.min(80, v.focusX ?? 50)), page: c.page, abs: path.join(dest, file) });
+    }
+  }
+  return out;
+}
+
+// ===== لقطات فيديو + صور مرخصة من Pixabay (رخصة Pixabay: استخدام تجاري مسموح من غير نسب) — لقطات عامة: ملعب/كورة/جمهور، مش لاعبين معيّنين
+const pixKey = () => process.env.PIXABAY_API_KEY || (() => { try { return fs.readFileSync(path.join(process.env.HOME || '', '.kader-kora/pixabay'), 'utf8').trim(); } catch { return ''; } })();
+const CLIP_Q = ['football stadium', 'soccer ball goal', 'football fans stadium', 'soccer match', 'football pitch night', 'soccer ball net'];
+const CLIP_CHECK = `إنت فريق الصور في «كادر كورة». دي صورة من لقطة فيديو مرشحة كخلفية لفيديو أخبار كورة مصرية.
+قيّمها بصرامة:
+- modest: محتشمة تمامًا (مفيش حد عريان أو من غير تيشيرت، مفيش لبس مكشوف، مفيش ستات بلبس مكشوف في الجمهور، مفيش إيحاء، مفيش عنف).
+- football: لقطة كورة قدم (ملعب، كورة، شبكة، جمهور، ماتش).
+- real: لقطة حقيقية متصورة بكاميرا — مش رسوم ولا 3D ولا كرتون ولا كورة طاولة.
+- neutral: محايدة — مفيش شعار أو لبس واضح لنادي أو منتخب معيّن، ومفيش وش قريب لشخص (عشان ما نوحيش إنه لاعب معيّن).
+- quality: واضحة.
+- text: فيه كلام أو لوجو أو علامة مائية؟
+رجّع JSON {"modest":true,"football":true,"real":true,"neutral":true,"quality":true,"text":false,"why":""}`;
+/** لحد max لقطات فيديو عامة (كورة/ملعب/جمهور) — بتتحط ورا الموشن جرافيك */
+export async function findClips(slug, dest, log = console.log, max = 3) {
+  const key = pixKey(); if (!key) return [];
+  const out = []; const t0 = Date.now();
+  const qs = [...CLIP_Q].sort(() => Math.random() - 0.5);
+  for (const q of qs) {
+    if (out.length >= max || Date.now() - t0 > 150e3) break;
+    const j = await (await fetch(`https://pixabay.com/api/videos/?key=${key}&q=${encodeURIComponent(q)}&per_page=30&safesearch=true&video_type=film`).catch(() => null))?.json().catch(() => ({})) || {};
+    const hits = (j.hits || []).filter((h) => h.duration >= 8 && h.duration <= 60 && h.videos?.tiny?.url && (h.videos.tiny.size || 0) < 30e6).sort(() => Math.random() - 0.5).slice(0, 3);
+    for (const h of hits) {
+      if (out.length >= max) break;
+      const thumb = path.join(dest, `${slug}-clip-thumb.jpg`);
+      try { await download(h.videos.tiny.thumbnail || h.videos.small.thumbnail, thumb); } catch { continue; }
+      const v = await vision(CLIP_CHECK, [thumb]).catch(() => null); fs.rmSync(thumb, { force: true });
+      if (!v?.modest || !v.football || !v.real || !v.neutral || !v.quality || v.text) { log(`⊘ لقطة ${h.id} (${q}): ${v?.why || 'مش مناسبة'}`); continue; }
+      const file = `${slug}-clip-${out.length + 1}.mp4`;
+      try { await download(h.videos.tiny.url, path.join(dest, file)); } catch { continue; }
+      log(`✓ لقطة فيديو: ${q} · ${h.duration}ث (Pixabay #${h.id})`);
+      out.push({ src: `media/${file}`, file, ctx: true, video: true, tag: 'لقطة', re: '', credit: `Video: ${h.user} / Pixabay`, focusX: 50, page: h.pageURL, abs: path.join(dest, file) });
     }
   }
   return out;

@@ -1,6 +1,6 @@
 // هوية «كادر كورة» — كل الألوان والخطوط والسرعات في مكان واحد (عدّل هنا بس).
 import React from 'react';
-import { staticFile, interpolate, spring, useCurrentFrame, useVideoConfig, Easing, Img } from 'remotion';
+import { staticFile, interpolate, spring, useCurrentFrame, useVideoConfig, Easing, Img, OffthreadVideo } from 'remotion';
 
 // اسم القناة: [الجزء الدهبي, الجزء الأبيض] — غيّره هنا بس وكل حاجة تتحدث
 export const CHANNEL: [string, string] = ['كادر', 'كورة'];
@@ -47,13 +47,13 @@ export function useOut(sceneFrames: number, len = 8) {
 
 /** خلفية الهوية: تدرج كحلي + خطوط شبكة خفيفة متحركة */
 /** مكس احترافي: لو المشهد عنده صورة خلفية (bg)، الموشن جرافيك بيتعمل فوق صورة اللاعب الحقيقية (متعتمة وبتتحرك) */
-export const BgPhoto = React.createContext<{ src: string; focusX?: number; credit?: string } | null>(null);
+export const BgPhoto = React.createContext<{ src: string; focusX?: number; credit?: string; video?: boolean } | null>(null);
 export const BrandBg: React.FC = () => {
   const f = useCurrentFrame(); const bg = React.useContext(BgPhoto);
   return (
     <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(120% 80% at 50% 30%, ${C.navy2} 0%, ${C.navy} 70%)` }}>
       {bg && <>
-        <Img src={staticFile(bg.src)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: `${bg.focusX ?? 50}% 15%`, opacity: 0.62, transform: `scale(${1.08 + f * 0.0009})`, filter: 'saturate(1.1) contrast(1.05)' }} />
+        {bg.video ? <OffthreadVideo muted src={staticFile(bg.src)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.62, filter: 'saturate(1.1) contrast(1.05)' }} /> : <Img src={staticFile(bg.src)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: `${bg.focusX ?? 50}% 15%`, opacity: 0.62, transform: `scale(${1.08 + f * 0.0009})`, filter: 'saturate(1.1) contrast(1.05)' }} />}
         <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(180deg, rgba(8,16,40,0.25) 0%, rgba(8,16,40,0.5) 35%, rgba(8,16,40,0.72) 65%, rgba(8,16,40,0.9) 100%)` }} />
         {bg.credit && <div style={{ position: 'absolute', left: 24, bottom: 150, fontSize: 20, color: 'rgba(255,255,255,0.6)', fontFamily: 'sans-serif', direction: 'ltr' }}>{bg.credit}</div>}
       </>}
