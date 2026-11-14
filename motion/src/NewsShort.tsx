@@ -6,7 +6,7 @@ import { TrendBar, Watermark, Captions, SourceStrip, type Caption } from './temp
 import * as S from './templates/scenes';
 
 export interface Scene { type: string; start: number; end: number; [k: string]: unknown }
-export interface Plan { duration: number; audio: string; music?: string; trend: string; sources: string; scenes: Scene[]; captions: Caption[] }
+export interface Plan { date?: string; duration: number; audio: string; music?: string; trend: string; sources: string; scenes: Scene[]; captions: Caption[] }
 
 const MAP: Record<string, React.FC<any>> = {
   photo: S.PhotoScene, score: S.ScoreScene, versus: S.VersusScene, claim: S.ClaimScene,
@@ -35,7 +35,7 @@ export const NewsShort: React.FC<Plan> = (plan) => {
         );
       })}
       <TrendBar text={plan.trend} />
-      <Watermark />
+      <Watermark date={plan.date} />
       <SourceStrip text={plan.sources} />
       <Captions items={plan.captions} fps={fps} />
       {plan.audio && <Audio src={staticFile(plan.audio)} />}

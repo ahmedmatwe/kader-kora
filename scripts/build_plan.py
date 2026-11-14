@@ -41,7 +41,7 @@ for sc in scenes['scenes']:
     a, b = times[sc.pop('from')][0], times[sc.pop('to')][1]
     out.append({**sc, 'start': round(a - (LEAD if not out else GAP / 2), 2), 'end': round(b + GAP / 2, 2)})
 out[-1]['end'] = total
-plan = {'duration': total, 'audio': 'media/voice.wav', 'trend': scenes['trend'], 'sources': scenes['sources'], 'scenes': out, 'captions': caps}
+plan = {'date': scenes.get('date') or __import__('os').environ.get('PUB_DATE') or __import__('datetime').datetime.now(__import__('zoneinfo').ZoneInfo('Africa/Cairo')).strftime('%Y-%m-%d'), 'duration': total, 'audio': 'media/voice.wav', 'trend': scenes['trend'], 'sources': scenes['sources'], 'scenes': out, 'captions': caps}
 if scenes.get('music'): plan['music'] = scenes['music']
 json.dump(plan, open(f'{d}/build/plan.json', 'w'), ensure_ascii=False, indent=1)
 json.dump({k: [round(v[0], 2), round(v[1], 2)] for k, v in times.items()}, open(f'{d}/build/timing.json', 'w'))
