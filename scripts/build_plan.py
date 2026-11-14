@@ -4,17 +4,24 @@ d = sys.argv[1]; FF = '/opt/homebrew/opt/ffmpeg-full/bin/' if os.path.exists('/o
 lines = json.load(open(f'{d}/script.json'))['lines']; scenes = json.load(open(f'{d}/scenes.json'))
 GAP, LEAD, TAIL = 0.22, 0.2, 1.4
 dur = lambda f: float(subprocess.check_output([FF + 'ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', f]))
-t = LEAD; times = {}; inputs = []; parts = []
-for i, l in enumerate(lines):
-    src = f'{d}/voice/{l["id"]}.wav'; os.makedirs(f'{d}/build/lines', exist_ok=True); f = f'{d}/build/lines/{l["id"]}.wav'
-    trim = 'silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.05,areverse,silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.08,areverse,afade=t=in:d=0.01,areverse,afade=t=in:d=0.03,areverse'
-    subprocess.run([FF + 'ffmpeg', '-loglevel', 'error', '-y', '-i', src, '-af', trim, f], check=True)
-    L = dur(f); times[l['id']] = (t, t + L)
-    inputs += ['-i', f]; parts.append(f'[{i}]aresample=48000,adelay={int(t*1000)}|{int(t*1000)}[a{i}]'); t += L + GAP
-total = round(t - GAP + TAIL, 2)
-mix = ';'.join(parts) + ';' + ''.join(f'[a{i}]' for i in range(len(lines))) + f'amix=inputs={len(lines)}:normalize=0,apad,atrim=0:{total},loudnorm=I=-14:TP=-1.5:LRA=9[o]'
-os.makedirs(f'{d}/build', exist_ok=True)
-subprocess.run([FF + 'ffmpeg', '-loglevel', 'error', '-y', *inputs, '-filter_complex', mix, '-map', '[o]', '-ar', '48000', f'{d}/build/voice.wav'], check=True)
+cutf = f'{d}/voice/cuts.json'
+if os.path.exists(cutf) and os.path.exists(f'{d}/voice/full.wav'):
+    # الصوت الكامل زي ما اتسجل (من غير تقطيع) — والمشاهد/الترجمة متظبطة على أوقات السطور
+    cuts = json.load(open(cutf))['cuts']; times = {l['id']: (LEAD + cuts[i], LEAD + cuts[i + 1]) for i, l in enumerate(lines)}
+    total = round(LEAD + cuts[-1] + TAIL, 2); os.makedirs(f'{d}/build', exist_ok=True)
+    subprocess.run([FF + 'ffmpeg', '-loglevel', 'error', '-y', '-i', f'{d}/voice/full.wav', '-af', f'aresample=48000,adelay={int(LEAD*1000)}|{int(LEAD*1000)},apad,atrim=0:{total},loudnorm=I=-14:TP=-1.5:LRA=9', '-ar', '48000', f'{d}/build/voice.wav'], check=True)
+else:
+    t = LEAD; times = {}; inputs = []; parts = []
+    for i, l in enumerate(lines):
+        src = f'{d}/voice/{l["id"]}.wav'; os.makedirs(f'{d}/build/lines', exist_ok=True); f = f'{d}/build/lines/{l["id"]}.wav'
+        trim = 'silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.05,areverse,silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.08,areverse,afade=t=in:d=0.01,areverse,afade=t=in:d=0.03,areverse'
+        subprocess.run([FF + 'ffmpeg', '-loglevel', 'error', '-y', '-i', src, '-af', trim, f], check=True)
+        L = dur(f); times[l['id']] = (t, t + L)
+        inputs += ['-i', f]; parts.append(f'[{i}]aresample=48000,adelay={int(t*1000)}|{int(t*1000)}[a{i}]'); t += L + GAP
+    total = round(t - GAP + TAIL, 2)
+    mix = ';'.join(parts) + ';' + ''.join(f'[a{i}]' for i in range(len(lines))) + f'amix=inputs={len(lines)}:normalize=0,apad,atrim=0:{total},loudnorm=I=-14:TP=-1.5:LRA=9[o]'
+    os.makedirs(f'{d}/build', exist_ok=True)
+    subprocess.run([FF + 'ffmpeg', '-loglevel', 'error', '-y', *inputs, '-filter_complex', mix, '-map', '[o]', '-ar', '48000', f'{d}/build/voice.wav'], check=True)
 # ترجمة: كل سطر بيتقسم لجمل قصيرة (≤5 كلمات أو عند الفاصلة) والوقت بالنسبة لعدد الحروف
 caps = []
 for l in lines:

@@ -65,11 +65,12 @@ export async function voice(dir, lines, log = console.log) {
       if (W[k].s - W[k - 1].e < 0.05) tight++;
       cuts.push((W[k - 1].e + W[k].s) / 2); from = k + 1;
     }
-    if (tight > 1 && attempt === 0) { log(`⟳ الصوت: ${tight} فواصل من غير سكتة (هيبان تقطيع) — بنعيد`); continue; }
     cuts.push(sec);
     lines.forEach((l, i) => execFileSync(`${FF}ffmpeg`, ['-loglevel', 'error', '-y', '-i', full, '-ss', String(cuts[i]), '-to', String(cuts[i + 1]), path.join(vdir, `${l.id}.wav`)]));
     fs.writeFileSync(path.join(vdir, 'transcript.txt'), heard);
-    log(`✓ الصوت: ${sec.toFixed(1)}ث، تطابق ${(sim * 100).toFixed(0)}%، فواصل من غير سكتة: ${tight}`);
+    // آخر وقفة بعد آخر كلمة + نص ثانية — والصوت الكامل هو اللي بيتحط في الفيديو (من غير تقطيع)
+    fs.writeFileSync(path.join(vdir, 'cuts.json'), JSON.stringify({ cuts: [0, ...cuts.slice(1, -1), Math.min(sec, W.at(-1).e + 0.5)] }));
+    log(`✓ الصوت: ${sec.toFixed(1)}ث، تطابق ${(sim * 100).toFixed(0)}%`);
     return { transcript: heard, similarity: sim, seconds: sec };
   }
   throw new Error('الصوت ما عدّاش المراجعة بعد محاولتين');

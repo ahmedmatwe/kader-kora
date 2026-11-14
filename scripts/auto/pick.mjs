@@ -36,15 +36,22 @@ ${list}
 
 جمّع العناوين اللي بتتكلم عن نفس القصة، واختار أقوى 5 قصص تنفع فيديو شورت 45 ثانية النهارده:
 - القصة لازم تكون مذكورة في جريدتين مختلفتين على الأقل (رقم العناوين من جرايد مختلفة).
-${request ? `- صاحب القناة طالب الموضوع ده بالاسم: «${request}» — اختار القصص اللي عنه بس.\n` : ''}- رتّب حسب: قد إيه الناس مهتمة/بتبحث، جديدة، فيها رقم أو مفارقة أو جدل كروي مشروع.
+${request ? `- صاحب القناة طالب الموضوع ده بالاسم: «${request}» — اختار القصص اللي عنه بس.\n` : ''}- إحنا قناة تريند: الأولوية القصوى للقصص المرتبطة بحاجة «الناس بتبحث» عنها، وبعدها القصص اللي كل الجرايد بتكتب عنها (3 جرايد أو أكتر). أي خبر عادي مش متداول ما تختارهوش.
+- رتّب حسب: قد إيه الناس مهتمة/بتبحث، جديدة، فيها رقم أو مفارقة أو جدل كروي مشروع.
 - استبعد أي قصة اتعملت قبل كده أو قريبة منها (نفس الحدث أو نفس الرقم أو نفس اللاعب في نفس الموضوع): ${recent.length ? recent.join(' | ') : 'مفيش'}
 رجّع JSON {"stories":[{"topic":"وصف القصة في سطر","slug":"english-slug-2-4-words","ids":[أرقام العناوين],"why":"ليه تريند","type":"news|match-reaction|evergreen","searched":true|false}]}`, { temp: 0.3, fast: true });
   const stories = Array.isArray(r) ? r : (r.stories || []);
+  // ترتيب التريند في الكود: مرتبطة ببحث الناس > عدد الجرايد اللي كاتبة عنها. أقل من 3 جرايد ومن غير بحث = مش تريند
+  const trendScore = (st) => { const hs = (st.ids || []).map((i) => hits[i]).filter(Boolean); const papers = new Set(hs.map((h) => h.paper)).size; return (hs.some((h) => h.searched) ? 10 : 0) + papers * 2; };
+  for (const st of stories) st.trend = trendScore(st);
+  stories.sort((a, b) => b.trend - a.trend);
+  for (const st of stories.filter((x) => x.trend < 6 && !request)) log(`⊘ «${st.topic}»: مش تريند كفاية (${st.trend})`);
+  stories.splice(0, stories.length, ...stories.filter((x) => x.trend >= 6 || request));
   if (!stories.length) log(`⊘ رئيس التحرير ما اختارش قصص: ${JSON.stringify(r).slice(0, 200)}`);
   for (const s of stories) {
     const dup = recent.find((t) => overlap(t, s.topic) >= 0.3);
     if (dup) { log(`⊘ «${s.topic}»: متعمل قبل كده («${dup.slice(0, 60)}»)`); continue; }
-    if (/احتمال|أنباء|انباء|شائع|تقارير|مفاوض|محادثات|اقتراب (رحيل|عودة|انتقال|ضم)|يقترب من (الرحيل|العودة|الانتقال)|مرشح لـ?(الرحيل|الانتقال)|جدل/.test(s.topic)) { log(`⊘ «${s.topic}»: كلام أنباء/مفاوضات مش خبر مؤكد — ممنوع`); continue; }
+    if (/احتمال|أنباء|انباء|شائع|تقارير|مفاوض|محادثات|اقتراب|يقترب (?!من (التأهل|الصدارة|اللقب|حسم))|مرتقب|محتمل|تطورات مثيرة|يقترب من (الرحيل|العودة|الانتقال)|مرشح لـ?(الرحيل|الانتقال)|جدل/.test(s.topic)) { log(`⊘ «${s.topic}»: كلام أنباء/مفاوضات مش خبر مؤكد — ممنوع`); continue; }
     const src = [...new Map((s.ids || []).map((i) => hits[i]).filter(Boolean).map((h) => [h.paper, h])).values()];
     if (src.length < 2) { log(`⊘ «${s.topic}»: مصدر واحد بس`); continue; }
     const v = await verify(s, src, log, hits.slice().sort((a, b) => b.at - a.at).slice(0, 40));
