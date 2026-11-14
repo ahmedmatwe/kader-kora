@@ -1,7 +1,7 @@
 // فريق الصوت: طلب TTS واحد للسكريبت كله (توفير الكوتة: ~10 طلبات/يوم لكل مفتاح) بصوت Fenrir،
 // بعدين faster-whisper يطلّع وقت كل كلمة → نقسم الصوت لسطور (voice/<id>.wav) → build_plan يكمل زي ما هو.
 // مراجعة الصوت: النص اللي اتسمع لازم يطابق السكريبت ≥ 70% وإلا نعيد (مرة واحدة).
-import fs from 'node:fs'; import path from 'node:path'; import { execFileSync } from 'node:child_process';
+import fs from 'node:fs'; import path from 'node:path'; import { execFileSync } from 'node:child_process'; import { fileURLToPath } from 'node:url';
 import { keys as kaderKeys } from './ai.mjs';
 const FF = fs.existsSync('/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg') ? '/opt/homebrew/opt/ffmpeg-full/bin/' : '';
 const MODELS = (process.env.GEMINI_TTS_MODEL || 'gemini-3.8-flash-tts,gemini-3.1-flash-tts-preview,gemini-2.5-flash-preview-tts').split(',');
@@ -32,7 +32,7 @@ function similarity(a, b) { const A = norm(a), B = new Set(norm(b)); return A.fi
 
 /** الأوقات: faster-whisper (أو whisper-cli على الماك) → [{w,s,e}] */
 function words(file) {
-  const py = path.join(path.dirname(new URL(import.meta.url).pathname), 'align.py');
+  const py = path.join(path.dirname(fileURLToPath(import.meta.url)), 'align.py');
   const out = execFileSync(process.env.PYTHON || 'python3', [py, file, 'ar'], { encoding: 'utf8', maxBuffer: 1 << 26, timeout: 900000 });
   const j = JSON.parse(out.trim().split('\n').pop()); if (j.error) throw new Error(j.error); return j;
 }
@@ -48,17 +48,28 @@ export async function voice(dir, lines, log = console.log) {
     const al = words(full); const heard = al.words.map((w) => w.w).join(' ');
     const sim = similarity(text, heard);
     if (sim < 0.7) { log(`⟳ الصوت قال كلام مختلف (تطابق ${(sim * 100).toFixed(0)}%) — بنعيد`); continue; }
-    // تقسيم: حدود السطور بنسبة عدد الكلمات، وبعدين أكبر سكتة قريبة (±3 كلمات)
-    const W = al.words; const ratio = W.length / nWords; let cum = 0; const cuts = [0];
-    for (const l of lines.slice(0, -1)) {
-      cum += norm(l.vo).length; let k = Math.min(W.length - 1, Math.max(1, Math.round(cum * ratio)));
-      let best = k, gap = -1; for (let j = Math.max(1, k - 3); j <= Math.min(W.length - 1, k + 3); j++) { const g = W[j].s - W[j - 1].e; if (g > gap) { gap = g; best = j; } }
-      cuts.push((W[best - 1].e + W[best].s) / 2);
+    // تقسيم من غير تقطيع: نلاقي أول كلمة في كل سطر جوه كلام whisper (مطابقة)، ونقطع في السكتة اللي قبلها بالظبط
+    const W = al.words; const ratio = W.length / nWords; let cum = 0; const cuts = [0]; let tight = 0;
+    const H = W.map((w) => norm(w.w).join('')); const pre = (x) => (x || '').replace(/^(و|ف|ب|ل|ال|وال|بال|لل)(?=..)/, '').slice(0, 3);
+    const same = (a, b) => !!a && !!b && (a === b || pre(a) === pre(b));
+    let from = 1;
+    for (let i = 0; i < lines.length - 1; i++) {
+      cum += norm(lines[i].vo).length; const exp = Math.min(W.length - 1, Math.max(1, Math.round(cum * ratio)));
+      const nx = norm(lines[i + 1].vo); let k = -1, score = -1;
+      for (let j = Math.max(from, exp - 8); j <= Math.min(W.length - 1, exp + 8); j++) {
+        const sc = (same(H[j], nx[0]) ? 2 : 0) + (same(H[j + 1], nx[1]) ? 1 : 0) + (same(H[j + 2], nx[2]) ? 1 : 0);
+        const g = W[j].s - W[j - 1].e; const val = sc * 10 + Math.min(g, 0.6) * 5 - Math.abs(j - exp) * 0.3;
+        if (sc >= 2 && val > score) { score = val; k = j; }
+      }
+      if (k < 0) { let gap = -1; for (let j = Math.max(from, exp - 5); j <= Math.min(W.length - 1, exp + 5); j++) { const g = W[j].s - W[j - 1].e; if (g > gap) { gap = g; k = j; } } }
+      if (W[k].s - W[k - 1].e < 0.05) tight++;
+      cuts.push((W[k - 1].e + W[k].s) / 2); from = k + 1;
     }
+    if (tight > 1 && attempt === 0) { log(`⟳ الصوت: ${tight} فواصل من غير سكتة (هيبان تقطيع) — بنعيد`); continue; }
     cuts.push(sec);
     lines.forEach((l, i) => execFileSync(`${FF}ffmpeg`, ['-loglevel', 'error', '-y', '-i', full, '-ss', String(cuts[i]), '-to', String(cuts[i + 1]), path.join(vdir, `${l.id}.wav`)]));
     fs.writeFileSync(path.join(vdir, 'transcript.txt'), heard);
-    log(`✓ الصوت: ${sec.toFixed(1)}ث، تطابق ${(sim * 100).toFixed(0)}%`);
+    log(`✓ الصوت: ${sec.toFixed(1)}ث، تطابق ${(sim * 100).toFixed(0)}%، فواصل من غير سكتة: ${tight}`);
     return { transcript: heard, similarity: sim, seconds: sec };
   }
   throw new Error('الصوت ما عدّاش المراجعة بعد محاولتين');

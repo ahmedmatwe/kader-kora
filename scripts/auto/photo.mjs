@@ -8,12 +8,14 @@ const OK_LIC = /^(CC BY(-SA)? [234]\.0|CC0|Public domain|PD)/i;
 const strip = (s) => String(s || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
 
 async function candidates(q) {
-  const u = `${API}?action=query&format=json&generator=search&gsrnamespace=6&gsrlimit=20&gsrsearch=${encodeURIComponent(`"${q}" filetype:bitmap`)}&prop=imageinfo&iiprop=url|size|extmetadata|mime&iiurlwidth=1280`;
-  const j = await (await fetch(u, { headers: UA })).json().catch(() => ({}));
-  return Object.values(j.query?.pages || {}).map((p) => {
+  // أرشيف اللاعب نفسه (Category) + البحث العادي
+  const tail = '&prop=imageinfo&iiprop=url|size|extmetadata|mime&iiurlwidth=1280';
+  const urls = [`${API}?action=query&format=json&generator=categorymembers&gcmtitle=${encodeURIComponent(`Category:${q}`)}&gcmtype=file&gcmlimit=50${tail}`, `${API}?action=query&format=json&generator=search&gsrnamespace=6&gsrlimit=20&gsrsearch=${encodeURIComponent(`"${q}" filetype:bitmap`)}${tail}`];
+  const pages = {}; for (const u of urls) { const j = await (await fetch(u, { headers: UA })).json().catch(() => ({})); Object.assign(pages, j.query?.pages || {}); }
+  return Object.values(pages).map((p) => {
     const i = p.imageinfo?.[0] || {}; const m = i.extmetadata || {};
     return { title: p.title, url: i.thumburl || i.url, w: i.width, h: i.height, mime: i.mime, license: strip(m.LicenseShortName?.value), artist: strip(m.Artist?.value).slice(0, 60), date: strip(m.DateTimeOriginal?.value || m.DateTime?.value), page: i.descriptionurl };
-  }).filter((c) => c.url && /jpeg|png/.test(c.mime) && c.w >= 900 && OK_LIC.test(c.license) && c.artist);
+  }).filter((c) => c.url && /jpeg|png/.test(c.mime) && c.w >= 700 && OK_LIC.test(c.license) && c.artist);
 }
 
 /** يرجّع {src,label,credit,file} أو null. dest = فولدر motion/public/media */
