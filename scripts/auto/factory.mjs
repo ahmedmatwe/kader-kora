@@ -5,7 +5,7 @@ import fs from 'node:fs'; import path from 'node:path'; import { execFileSync } 
 import { ROOT, readJson, writeJson, cairoHour } from '../lib.mjs';
 import { pickStory } from './pick.mjs';
 import { hooks, script, reviewScript, scenes, checkScenes, fixScenes, photoMismatches, mixPhotos, factsText } from './write.mjs';
-import { findPhotos } from './photo.mjs';
+import { findPhotos, findContext } from './photo.mjs';
 import { voice, QuotaError } from './voice.mjs';
 import { reviewFrames } from './qa.mjs';
 import { makeTitles } from './titles.mjs';
@@ -76,6 +76,8 @@ if (DRY) await done('dry', { id, topic: story.topic });
 const media = path.join(ROOT, 'motion/public/media'); fs.mkdirSync(media, { recursive: true });
 const photos = await findPhotos(story.people, id, media, log).catch((e) => (log(`⊘ صور: ${e.message}`), []));
 const photo = photos[0] || null;
+// صور السياق (منتخب/نادي/استاد/جمهور) عشان مفيش مشهد يطلع كتابة على خلفية فاضية
+const ctxPhotos = await findContext(story, id, media, log).catch((e) => (log(`⊘ صور السياق: ${e.message}`), []));
 let sn; let errs = [];
 for (let a = 0; a < 3; a++) {
   sn = await scenes(story, sc.lines, photos.map((p) => ({ src: p.src, label: p.label, credit: p.credit, focusX: p.focusX, person: p.person })));
@@ -87,7 +89,7 @@ for (let a = 0; a < 3; a++) {
 const swapBad = (x) => { for (const s of photoMismatches(x, sc.lines)) { log(`🖼️ فريق الصور: شلت صورة ${s.person} من «${s.from}» (الكلام مش عنه)`); for (const k of ['src', 'label', 'credit', 'badge', 'zoom', 'focusX', 'person']) delete s[k]; s.type = 'headline'; s.title = s.title || story.topic.slice(0, 26); } errs = checkScenes(x, sc.lines); };
 if (errs.length && errs.every((e) => e.startsWith('صورة '))) swapBad(sn);
 if (errs.length) await done('scenes-failed', { id, errs });
-mixPhotos(sn, sc.lines, photos, log, story.topic);
+mixPhotos(sn, sc.lines, [...photos, ...ctxPhotos], log, story.topic);
 const papers = [...new Set(story.sources.map((s) => s.paper))];
 const photoList = photos.map((p) => ({ src: p.src, label: p.label, credit: p.credit, focusX: p.focusX, person: p.person }));
 const saveScenes = () => writeJson(path.join(dir, 'scenes.json'), { trend: sn.trend, keep: sn.keep || [], sources: `المصادر: ${papers.join(' · ')}`, scenes: sn.scenes });
@@ -129,7 +131,7 @@ for (let round = 0; ; round++) {
   }
   if (!fixed) { if (probs.some((p) => HARD.test(p.issue))) await done('qa-failed', { id, problems: probs }); log('↪️ ما قدرناش نصلّح أكتر — الفيديو هيوصلك بملاحظات المراجعة'); break; }
   if (photoMismatches(fixed, sc.lines).length) swapBad(fixed);
-  mixPhotos(fixed, sc.lines, photos, () => {}, story.topic);
+  mixPhotos(fixed, sc.lines, [...photos, ...ctxPhotos], () => {}, story.topic);
   sn = fixed; saveScenes(); fixes++;
 }
 const music = path.join(ROOT, 'assets/music/music.mp3');
@@ -172,7 +174,7 @@ const plats = cfg.platforms.filter((p) => p !== 'youtube' || ytToday < (cfg.yout
 const ticket = { id, release: rel, topic: story.topic, approved: !!cfg.autoApprove && !qaNotes.length, approvedBy: cfg.autoApprove && !qaNotes.length ? cfg.approvedBy : null, createdAt: new Date().toISOString(), qa: { script: rv.issues || [], frames: qaNotes.length ? qaNotes : 'pass', fixes }, platforms: Object.fromEntries(plats.map((p) => [p, { at: slot(p), status: 'pending' }])) };
 writeJson(path.join(ROOT, 'queue', `${id}.json`), ticket);
 topics.push({ at: new Date().toISOString(), topic: story.topic, id }); writeJson(path.join(ROOT, 'data/topics.json'), topics.slice(-300));
-for (const p of photos) fs.rmSync(path.join(media, p.file), { force: true });
+for (const p of [...photos, ...ctxPhotos]) fs.rmSync(path.join(media, p.file), { force: true });
 log(`📬 في الطابور${ticket.approved ? ' (موافقة دائمة من صاحب القناة)' : ' — مستني موافقتك'}: ${Object.entries(ticket.platforms).map(([p, v]) => `${p} ${v.at}`).join(' · ')}`);
 await sendVideo(social, `✅ فيديو جاهز: ${t.youtube.title}\n${plan.duration} ثانية · مواعيد النشر: ${Object.entries(ticket.platforms).map(([p, v]) => `${p} ${new Date(v.at).toLocaleString('ar-EG', { timeZone: 'Africa/Cairo', hour: 'numeric', minute: '2-digit', weekday: 'short' })}`).join(' · ')}${qaNotes.length ? `\n⚠️ ملاحظات المراجعة:\n${qaNotes.map((p) => `• ${p.issue}`).join('\n')}` : ''}${ticket.approved ? '\n(موافقة دائمة — هيتنشر لوحده)' : '\nتنشره؟'}`, id);
 await done('queued', { id, topic: story.topic });
