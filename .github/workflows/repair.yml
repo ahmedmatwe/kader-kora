@@ -1,0 +1,52 @@
+name: repair
+# فريق الإصلاح الدائم: أول ما دورة المصنع تقع أو يطلع فيها تحذير، Claude يقرا السجل ويصلّح الكود ويرفعه فورًا.
+# وكمان أي طلب تطوير للبوت (issue عليه لابل «طلب») بيتنفذ هنا.
+on:
+  workflow_run: { workflows: [factory, publish, comments, stats], types: [completed] }
+  issues: { types: [labeled] }
+  workflow_dispatch: {}
+permissions: { contents: write, actions: write, issues: write, id-token: write }
+concurrency: { group: repair, cancel-in-progress: false }
+jobs:
+  fix:
+    if: >-
+      (github.event_name == 'workflow_dispatch') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'failure') ||
+      (github.event_name == 'issues' && github.event.label.name == 'طلب' && github.event.issue.user.login == github.repository_owner)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env: { HAS_TOKEN: '${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '''' }}' }
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 20 }
+      - name: سجل الدورة اللي وقعت
+        if: github.event_name == 'workflow_run'
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: gh run view ${{ github.event.workflow_run.id }} --log-failed | tail -300 > /tmp/failed.log || true
+      - name: Claude يصلّح
+        if: env.HAS_TOKEN == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          claude_args: --allowedTools "Bash,Read,Edit,Write,Glob,Grep"
+          prompt: |
+            إنت فريق الإصلاح الدائم لمصنع «كادر كورة» (شورتس كورة مصرية). اقرا README.md و ROADMAP.md الأول.
+            المهمة: ${{ github.event_name == 'issues' && format('نفّذ طلب التطوير ده: {0} — {1}', github.event.issue.title, github.event.issue.body) || 'دورة اتقعت. سجلها في /tmp/failed.log. لاقي السبب الجذري وصلّحه في الكود.' }}
+            قواعد ما تتكسرش:
+            - ما تغيّرش autoApprove ولا approvedBy في data/config.json، وما تنشرش أي فيديو، وما تلمسش ملفات queue/ غير لو الإصلاح محتاج كده بالظبط.
+            - ممنوع أي مفاتيح أو أسرار في الكود. ممنوع تلمس أي حاجة تخص «سر الموبايل».
+            - المصادر جرايد مصرية كبيرة بس، من غير شائعات، وصور محتشمة بس.
+            - اتأكد بـ node --check لكل ملف .mjs غيّرته، و npx tsc --noEmit -p motion لو غيّرت motion (اعمل npm install في motion الأول).
+            - لو السبب خارجي (كوتة، شبكة، موقع واقع) ما تغيّرش كود — اكتب ده بس.
+            - بعد الإصلاح: git add الملفات اللي غيّرتها بس، commit برسالة عربي قصيرة، git pull --rebase، git push.
+            - في الآخر اكتب سطرين بالمصري: كان فيه إيه، وصلّحت إيه.
+      - name: بلّغ صاحب القناة
+        if: always()
+        env:
+          T: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          C: ${{ secrets.TELEGRAM_CHAT_ID }}
+          WHAT: ${{ github.event_name == 'issues' && github.event.issue.title || github.event.workflow_run.name }}
+        run: |
+          if [ "$HAS_TOKEN" != true ]; then MSG="🛠️ فريق الإصلاح: «$WHAT» وقع، ومستني ربط اشتراك Claude علشان يصلّح لوحده."; else MSG="🛠️ فريق الإصلاح خلص شغله على «$WHAT» (${{ job.status }}). آخر تعديل: $(git log -1 --pretty=%s)"; fi
+          [ -n "$T" ] && curl -s -o /dev/null "https://api.telegram.org/bot$T/sendMessage" --data-urlencode "chat_id=$C" --data-urlencode "text=$MSG" || true

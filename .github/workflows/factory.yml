@@ -43,8 +43,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with: { name: preview, path: 'videos/*/final/*-social.mp4', if-no-files-found: ignore, retention-days: 3 }
-      - name: الدورة الجاية على طول (إنتاج مستمر لحد الحد اليومي)
+      - name: الدورة الجاية على طول (ما بنقفش غير عند الحد اليومي)
         if: always()
         env: { GH_TOKEN: '${{ github.token }}' }
         run: |
-          node -e "const c=require('./data/config.json');const f=require('fs').existsSync('data/factory.json')?require('./data/factory.json'):{runs:[]};const d=new Date().toISOString().slice(0,10);const n=f.runs.filter(r=>r.status==='queued'&&r.at.startsWith(d)).length;const last=f.runs.at(-1)||{};const stop=!c.enabled||n>=c.dailyTarget||['llm-quota','tts-quota','no-story'].includes(last.status);console.log(stop?'stop':'go',n,c.dailyTarget,last.status);process.exit(stop?1:0)" && gh workflow run factory.yml || echo "وقفنا: الحد اليومي أو الكوتة أو مفيش قصص — الكرون هيكمّل بعدين"
+          M=$(node -e "const c=require('./data/config.json');const f=require('fs').existsSync('data/factory.json')?require('./data/factory.json'):{runs:[]};const d=new Date().toISOString().slice(0,10);const n=f.runs.filter(r=>r.status==='queued'&&r.at.startsWith(d)).length;const last=f.runs.at(-1)||{};console.log(!c.enabled||n>=c.dailyTarget?'stop':['llm-quota','tts-quota','no-story'].includes(last.status)?'wait':'go')")
+          echo "الحالة: $M"
+          if [ "$M" = stop ]; then echo "وصلنا الحد اليومي — الكرون هيبدأ بكرة"; exit 0; fi
+          if [ "$M" = wait ]; then echo "كوتة/مفيش أخبار — نستنى 10 دقايق ونرجع"; sleep 600; fi
+          gh workflow run factory.yml
