@@ -14,9 +14,11 @@ const DRY = process.argv.includes('--dry');
 const FF = fs.existsSync('/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg') ? '/opt/homebrew/opt/ffmpeg-full/bin/' : '';
 const LOGF = path.join(ROOT, 'data/factory.json'); const flog = readJson(LOGF, { runs: [] });
 const cfg = readJson(path.join(ROOT, 'data/config.json'), { autoApprove: false, dailyTarget: 12, platforms: ['youtube', 'facebook', 'instagram'] });
-const lines = []; const log = (s) => { console.log(s); lines.push(s); };
+const T0 = Date.now(); const lines = []; const log = (s) => { const m = `[${((Date.now() - T0) / 60000).toFixed(1)}د] ${s}`; console.log(m); lines.push(s); };
 const QUIET_STATUS = ['disabled', 'daily-target-reached', 'no-story', 'dry'];
-const done = async (status, extra = {}) => { if (!QUIET_STATUS.includes(status) && status !== 'queued') await tell(`⚠️ فيديو ما كملش (${status})${extra.topic ? `\n«${extra.topic}»` : ''}\n${lines.slice(-2).join('\n')}`); flog.runs.push({ at: new Date().toISOString(), status, ...extra, log: lines.slice(-40) }); flog.runs = flog.runs.slice(-200); writeJson(LOGF, flog); console.log(`\n== ${status}`); process.exit(0); };
+const done = async (status, extra = {}) => { if (!QUIET_STATUS.includes(status) && status !== 'queued') await tell(`⚠️ فيديو ما كملش (${status})${extra.topic ? `\n«${extra.topic}»` : ''}\n${lines.slice(-2).join('\n')}`); flog.runs.push({ at: new Date().toISOString(), status, ...extra, log: lines.slice(-40) });
+  if (!['queued', 'dry'].includes(status) && extra.id) fs.rmSync(path.join(ROOT, 'videos', extra.id), { recursive: true, force: true }); // فيديو ما كملش ما يفضلش في الريبو
+  flog.runs = flog.runs.slice(-200); writeJson(LOGF, flog); console.log(`\n== ${status}`); process.exit(0); };
 
 if (!cfg.enabled) await done('disabled');
 // حد يومي (الكوتة): ما نعملش أكتر من dailyTarget في اليوم
@@ -27,7 +29,7 @@ if (madeToday >= cfg.dailyTarget) await done('daily-target-reached', { madeToday
 // 1) التريند + التحقيق
 const topics = readJson(path.join(ROOT, 'data/topics.json'), []);
 const recent = topics.filter((t) => Date.now() - new Date(t.at) < 5 * 86400e3).map((t) => t.topic);
-const onErr = async (e) => { if (/429|quota/i.test(String(e?.message))) await done('llm-quota', { error: String(e.message).slice(0, 200) }); console.error(e); await tell(`✗ المصنع وقع: ${String(e?.message || e).slice(0, 300)}`); process.exit(1); };
+const onErr = async (e) => { if (globalThis.__vid) fs.rmSync(path.join(ROOT, 'videos', globalThis.__vid), { recursive: true, force: true }); if (/429|quota/i.test(String(e?.message))) await done('llm-quota', { error: String(e.message).slice(0, 200) }); console.error(e); await tell(`✗ المصنع وقع: ${String(e?.message || e).slice(0, 300)}`); process.exit(1); };
 process.on('unhandledRejection', onErr); process.on('uncaughtException', onErr);
 const requests = readJson(path.join(ROOT, 'data/requests.json'), []);
 const req = requests.find((r) => r.status === 'pending');
@@ -59,7 +61,7 @@ const used = [...fs.readdirSync(path.join(ROOT, 'videos')), ...fs.readdirSync(pa
 const num = String(Math.max(1, ...used) + 1).padStart(2, '0');
 const slug = (story.slug || 'news').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30) || 'news';
 const id = `${num}-${slug}`; const dir = path.join(ROOT, 'videos', id); fs.mkdirSync(path.join(dir, 'final'), { recursive: true });
-log(`🎬 ${id}: ${story.topic}`);
+log(`🎬 ${id}: ${story.topic}`); globalThis.__vid = id;
 if (!DRY) await tell(`🎬 بدأت فيديو جديد:\n«${story.topic}»\n(${new Set(story.sources.map((x) => x.paper)).size} جرايد)`);
 writeJson(path.join(dir, 'story.json'), { ...story, hooks: hk.all, scriptReview: rv.issues || [] });
 fs.writeFileSync(path.join(dir, 'sources.md'), `# ${story.topic}\n\n## الحقايق المؤكدة\n${factsText(story)}\n\n## المصادر\n${story.sources.map((s) => `- ${s.paper}: ${s.title} — ${s.url} (${s.date || ''})`).join('\n')}\n`);
