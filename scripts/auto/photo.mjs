@@ -145,6 +145,13 @@ const CTX = [
   [/استاد القاهرة/, 'استاد القاهرة', ['Cairo International Stadium']],
   [/برج العرب/, 'برج العرب', ['Borg El Arab Stadium']],
 ];
+// Openverse: مئات الملايين من الصور المرخصة (Flickr وغيره) — رخص بتسمح بالاستخدام التجاري والتعديل بس
+const OV_Q = { 'منتخب مصر': ['Egypt national football team', 'Egypt football fans'], 'الأهلي': ['Al Ahly football', 'Al Ahly fans'], 'الزمالك': ['Zamalek football', 'Zamalek fans'], 'بيراميدز': ['Pyramids FC'], 'استاد القاهرة': ['Cairo International Stadium'], 'برج العرب': ['Borg El Arab stadium'], 'كورة مصرية': ['Egypt football stadium', 'Egyptian football fans', 'football stadium night', 'soccer match crowd'] };
+async function openverse(q) {
+  const j = await (await fetch(`https://api.openverse.org/v1/images/?q=${encodeURIComponent(q)}&license_type=commercial,modification&page_size=20&mature=false`, { headers: UA }).catch(() => null))?.json().catch(() => ({})) || {};
+  return (j.results || []).filter((r) => r.width >= 900 && /^(by|by-sa|cc0|pdm)$/.test(r.license) && r.url && !/\.(svg|gif)$/i.test(r.url))
+    .map((r) => ({ title: `OV:${r.title || r.id}`, url: r.url, w: r.width, license: r.license === 'cc0' ? 'CC0' : r.license === 'pdm' ? 'Public domain' : `CC ${r.license.toUpperCase()} ${r.license_version || ''}`.trim(), artist: String(r.creator || 'unknown').slice(0, 60), page: r.foreign_landing_url, src: r.source }));
+}
 const GENERIC = ['Cairo International Stadium', 'Association football in Egypt', 'Borg El Arab Stadium'];
 const SKIP_CAT = /women|basketball|handball|volleyball|kits|line-ups|coaches|players|logos|futsal|beach/i;
 async function catFiles(cat, depth = 1) {
@@ -155,15 +162,17 @@ async function catFiles(cat, depth = 1) {
   }
   return files;
 }
-const CTX_CHECK = (tag) => `إنت فريق الصور في «كادر كورة». دي صورة مرشحة كخلفية لفيديو عن «${tag}» (كورة قدم رجالي في مصر).
+const COLORS = { 'منتخب مصر': 'منتخب مصر (أحمر، وأحيانًا أبيض أو أسود، وشعار اتحاد الكرة المصري)', 'الأهلي': 'الأهلي (أحمر)', 'الزمالك': 'الزمالك (أبيض بخطين أحمر)', 'بيراميدز': 'بيراميدز (لبني/كحلي)' };
+const CTX_CHECK = (tag, others = []) => `إنت فريق الصور في «كادر كورة». دي صورة مرشحة كخلفية لفيديو عن «${tag}» (كورة قدم رجالي في مصر).
 قيّمها بصرامة:
+- match: ${COLORS[tag] ? `الصورة متوافقة مع ${COLORS[tag]} — لو اللبس أو الجمهور أو اللافتات واضح إنها لفريق تاني → false. لو مش واضح خالص (استاد فاضي مثلًا) → true.` : `صورة محايدة (استاد/ملعب/كورة/جمهور منتخب مصر). لو فيها لبس أو جمهور واضح لنادي معيّن${others.length ? ` غير ${others.join(' أو ')}` : ''} → false عشان ما نوحيش بحاجة غلط.`}
 - modest: محتشمة تمامًا (مفيش حد عريان أو من غير تيشيرت، مفيش لبس مكشوف، مفيش إيحاء، مفيش عنف أو دم).
 - football: مشهد كورة قدم (ماتش، ملعب، استاد، جمهور، فريق، تدريب) — مش سلة ولا يد ولا مناسبة سياسية.
 - closeup: true لو الصورة بورتريه قريب لشخص واحد هو المحور (إحنا مش عارفين هو مين فمش هنستخدمها).
 - quality: واضحة ومش مشوشة ولا قديمة جدًا أبيض وأسود.
 - text: فيه كلام كبير أو لوجو أو علامة مائية بتغطي الصورة؟
 - focusX: مركز الصورة أفقيًا من 0 لـ100.
-رجّع JSON {"modest":true,"football":true,"closeup":false,"quality":true,"text":false,"focusX":50,"why":""}`;
+رجّع JSON {"match":true,"modest":true,"football":true,"closeup":false,"quality":true,"text":false,"focusX":50,"why":""}`;
 /** لحد max صور سياق مرخصة: الأول للفرق/الأماكن اللي في القصة، وبعدين صور عامة لكورة مصر */
 export async function findContext(story, slug, dest, log = console.log, max = 3) {
   const text = [story.topic, ...(story.facts || []).map((f) => f.text || f)].join(' ');
@@ -171,17 +180,20 @@ export async function findContext(story, slug, dest, log = console.log, max = 3)
   const plan = [...wanted.map(([, tag, cats]) => [tag, cats, CTX.find((x) => x[1] === tag)[0].source]), ['كورة مصرية', GENERIC, '']];
   for (const [tag, cats, re] of plan) {
     let list = []; for (const c of cats) { list = list.concat(await catFiles(c).catch(() => [])); if (list.length > 40) break; }
-    list = list.filter((c) => !seen.has(c.title) && !/svg|logo|kit|map|signature|crest|emblem|badge|women|ticket|poster|stamp/i.test(c.title)).sort(() => Math.random() - 0.5).slice(0, 6);
+    for (const q of OV_Q[tag] || []) list = list.concat(await openverse(q).catch(() => []));
+    const key = (c) => c.title.replace(/^(OV:)?(File:)?/i, '').replace(/\.\w+$/, '').replace(/[_\s]+/g, ' ').toLowerCase();
+    list = [...new Map(list.map((c) => [key(c), c])).values()];
+    list = list.filter((c) => !seen.has(key(c)) && !/svg|logo|kit|map|signature|crest|emblem|badge|women|ticket|poster|stamp/i.test(c.title)).sort(() => Math.random() - 0.5).slice(0, 6);
     let got = 0;
     for (const c of list) {
       if (out.length >= max || got >= (tag === 'كورة مصرية' ? max : 2) || Date.now() - t0 > 150e3) break;
-      seen.add(c.title); const tmp = path.join(dest, `${slug}-ctx-cand.jpg`);
+      seen.add(key(c)); const tmp = path.join(dest, `${slug}-ctx-cand.jpg`);
       try { await download(c.url, tmp); } catch { continue; }
-      const v = await vision(CTX_CHECK(tag), [tmp]).catch(() => null);
-      if (!v?.modest || !v.football || v.closeup || !v.quality || v.text) { fs.rmSync(tmp, { force: true }); log(`⊘ صورة سياق ${c.title}: ${v?.why || 'مش مناسبة'}`); continue; }
+      const v = await vision(CTX_CHECK(tag, wanted.map((w) => w[1])), [tmp]).catch(() => null);
+      if (!v?.match || !v?.modest || !v.football || v.closeup || !v.quality || v.text) { fs.rmSync(tmp, { force: true }); log(`⊘ صورة سياق ${c.title}: ${v?.why || 'مش مناسبة'}`); continue; }
       const file = `${slug}-ctx-${out.length + 1}.jpg`; fs.renameSync(tmp, path.join(dest, file)); got++;
       log(`✓ صورة سياق «${tag}»: ${c.title} (${c.license})`);
-      out.push({ src: `media/${file}`, file, ctx: true, tag, re, credit: `Photo: ${c.artist} / Wikimedia Commons · ${c.license}`, focusX: Math.max(20, Math.min(80, v.focusX ?? 50)), page: c.page, abs: path.join(dest, file) });
+      out.push({ src: `media/${file}`, file, ctx: true, tag, re, credit: `Photo: ${c.artist} / ${c.src ? `${c.src} via Openverse` : 'Wikimedia Commons'} · ${c.license}`, focusX: Math.max(20, Math.min(80, v.focusX ?? 50)), page: c.page, abs: path.join(dest, file) });
     }
   }
   return out;
