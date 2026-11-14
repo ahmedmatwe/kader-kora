@@ -9,7 +9,8 @@ export function keys() {
   return list;
 }
 export const key = () => keys()[0];
-const WRITE = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-flash-latest', 'gemini-3-flash-preview'];
+// آخر القايمة موديلات خفيفة: لو كوتة اليوم خلصت على الكبار الإنتاج ما يقفش (المراجعين ومراجعة الجودة بيفحصوا زي ما هم)
+const WRITE = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-flash-latest', 'gemini-3-flash-preview', 'gemini-3.5-flash-lite', 'gemini-flash-lite-latest'];
 const LIGHT = ['gemini-3.5-flash-lite', 'gemini-flash-lite-latest', 'gemini-3.5-flash'];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
