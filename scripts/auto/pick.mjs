@@ -17,10 +17,11 @@ export async function googleTrends() {
 const POLICY = `سياسة القناة: كورة/رياضة مصرية بالأساس، والعالمي بس لو يهم مصر (لاعب مصري، منتخب، أندية مصرية، بطولة مصر فيها).
 ممنوع: شائعات من غير مصدرين، وفيات/حوادث/جرائم/أمراض لاعبين، سياسة أو دين، تشهير أو اتهام لحد، حياة شخصية، مراهنات.`;
 
-export async function pickStory({ recent = [], log = console.log } = {}) {
-  // 1) أخبار الجرايد الكبيرة آخر 24 ساعة
+export async function pickStory({ recent = [], log = console.log, request = '' } = {}) {
+  // 1) أخبار الجرايد الكبيرة آخر 24 ساعة (ولو صاحب القناة طالب موضوع، بندوّر عليه هو الأول)
   const hits = []; const seen = new Set();
-  for (const q of FOOTBALL_QUERIES) for (const h of await search(q, 1)) if (!seen.has(h.url)) { seen.add(h.url); hits.push(h); }
+  if (request) { for (const h of await search(request, 4)) if (!seen.has(h.url)) { seen.add(h.url); hits.push({ ...h, searched: request }); } log(`📝 طلب صاحب القناة: «${request}» — ${hits.length} خبر`); }
+  for (const q of request ? [] : FOOTBALL_QUERIES) for (const h of await search(q, 1)) if (!seen.has(h.url)) { seen.add(h.url); hits.push(h); }
   // 2) اللي الناس بتبحث عنه
   const gt = await googleTrends();
   const sporty = gt.length ? (await json(`${POLICY}\nدي أكتر حاجات الناس بتبحث عنها في مصر النهارده. اختار بس اللي ليها علاقة بالكورة أو الرياضة (لاعب، نادي، مدرب، ماتش، بطولة).\n${gt.map((t) => `- ${t.q} (${t.traffic})`).join('\n')}\nرجّع JSON {"sport":["..."]}`, { light: true }).catch(() => ({ sport: [] }))).sport || [] : [];
@@ -35,7 +36,7 @@ ${list}
 
 جمّع العناوين اللي بتتكلم عن نفس القصة، واختار أقوى 5 قصص تنفع فيديو شورت 45 ثانية النهارده:
 - القصة لازم تكون مذكورة في جريدتين مختلفتين على الأقل (رقم العناوين من جرايد مختلفة).
-- رتّب حسب: قد إيه الناس مهتمة/بتبحث، جديدة، فيها رقم أو مفارقة أو جدل كروي مشروع.
+${request ? `- صاحب القناة طالب الموضوع ده بالاسم: «${request}» — اختار القصص اللي عنه بس.\n` : ''}- رتّب حسب: قد إيه الناس مهتمة/بتبحث، جديدة، فيها رقم أو مفارقة أو جدل كروي مشروع.
 - استبعد أي قصة اتعملت قبل كده أو قريبة منها (نفس الحدث أو نفس الرقم أو نفس اللاعب في نفس الموضوع): ${recent.length ? recent.join(' | ') : 'مفيش'}
 رجّع JSON {"stories":[{"topic":"وصف القصة في سطر","slug":"english-slug-2-4-words","ids":[أرقام العناوين],"why":"ليه تريند","type":"news|match-reaction|evergreen","searched":true|false}]}`, { temp: 0.3 });
   for (const s of r.stories || []) {

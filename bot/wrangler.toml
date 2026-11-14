@@ -1,0 +1,8 @@
+name = "kader-kora-bot"
+main = "worker.js"
+compatibility_date = "2025-06-01"
+
+# ذاكرة المحادثة + التأكيدات المعلّقة. الـid بيتملى من scripts/connect-bot.sh
+[[kv_namespaces]]
+binding = "MEM"
+id = "REPLACE_WITH_KV_ID"

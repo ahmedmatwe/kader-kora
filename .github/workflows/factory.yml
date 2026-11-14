@@ -27,6 +27,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           RENDER_CONCURRENCY: '100%'
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: node scripts/auto/factory.mjs
       - name: حفظ (الطابور + السجل + ملفات الفيديو النصية)
         if: always()

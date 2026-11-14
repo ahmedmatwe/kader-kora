@@ -9,29 +9,34 @@ import { findPhotos } from './photo.mjs';
 import { voice, QuotaError } from './voice.mjs';
 import { reviewFrames } from './qa.mjs';
 import { makeTitles } from './titles.mjs';
+import { tell, sendVideo } from './notify.mjs';
 const DRY = process.argv.includes('--dry');
 const FF = fs.existsSync('/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg') ? '/opt/homebrew/opt/ffmpeg-full/bin/' : '';
 const LOGF = path.join(ROOT, 'data/factory.json'); const flog = readJson(LOGF, { runs: [] });
 const cfg = readJson(path.join(ROOT, 'data/config.json'), { autoApprove: false, dailyTarget: 12, platforms: ['youtube', 'facebook', 'instagram'] });
 const lines = []; const log = (s) => { console.log(s); lines.push(s); };
-const done = (status, extra = {}) => { flog.runs.push({ at: new Date().toISOString(), status, ...extra, log: lines.slice(-40) }); flog.runs = flog.runs.slice(-200); writeJson(LOGF, flog); console.log(`\n== ${status}`); process.exit(0); };
+const QUIET_STATUS = ['disabled', 'daily-target-reached', 'no-story', 'dry'];
+const done = async (status, extra = {}) => { if (!QUIET_STATUS.includes(status) && status !== 'queued') await tell(`⚠️ فيديو ما كملش (${status})${extra.topic ? `\n«${extra.topic}»` : ''}\n${lines.slice(-2).join('\n')}`); flog.runs.push({ at: new Date().toISOString(), status, ...extra, log: lines.slice(-40) }); flog.runs = flog.runs.slice(-200); writeJson(LOGF, flog); console.log(`\n== ${status}`); process.exit(0); };
 
-if (!cfg.enabled) done('disabled');
+if (!cfg.enabled) await done('disabled');
 // حد يومي (الكوتة): ما نعملش أكتر من dailyTarget في اليوم
 const today = new Date().toISOString().slice(0, 10);
 const madeToday = flog.runs.filter((r) => r.status === 'queued' && r.at.startsWith(today)).length;
-if (madeToday >= cfg.dailyTarget) done('daily-target-reached', { madeToday });
+if (madeToday >= cfg.dailyTarget) await done('daily-target-reached', { madeToday });
 
 // 1) التريند + التحقيق
 const topics = readJson(path.join(ROOT, 'data/topics.json'), []);
 const recent = topics.filter((t) => Date.now() - new Date(t.at) < 5 * 86400e3).map((t) => t.topic);
-const onErr = (e) => { if (/429|quota/i.test(String(e?.message))) done('llm-quota', { error: String(e.message).slice(0, 200) }); console.error(e); process.exit(1); };
+const onErr = async (e) => { if (/429|quota/i.test(String(e?.message))) await done('llm-quota', { error: String(e.message).slice(0, 200) }); console.error(e); await tell(`✗ المصنع وقع: ${String(e?.message || e).slice(0, 300)}`); process.exit(1); };
 process.on('unhandledRejection', onErr); process.on('uncaughtException', onErr);
-const story = await pickStory({ recent, log });
-if (!story) done('no-story');
+const requests = readJson(path.join(ROOT, 'data/requests.json'), []);
+const req = requests.find((r) => r.status === 'pending');
+const story = await pickStory({ recent, log, request: req?.text });
+if (req) { req.status = story ? 'done' : 'not-found'; req.at2 = new Date().toISOString(); writeJson(path.join(ROOT, 'data/requests.json'), requests); if (!story) await tell(`🔎 الموضوع اللي طلبته «${req.text}» ما لقيتهوش في جريدتين كبار — مش هعمله عشان المصداقية.`); }
+if (!story) await done('no-story');
 
 // 2) هوك → سيناريو → مراجعة مستقلة
-const hk = await hooks(story); if (!hk.best) done('no-hook', { topic: story.topic });
+const hk = await hooks(story); if (!hk.best) await done('no-hook', { topic: story.topic });
 log(`🪝 الهوك: ${hk.best}`);
 let sc; let rv; let notes = [];
 for (let a = 0; a < 3; a++) { // سيناريو → مراجعة مستقلة → إعادة كتابة بملاحظات المراجع لحد ما يعدّي
@@ -44,9 +49,9 @@ for (let a = 0; a < 3; a++) { // سيناريو → مراجعة مستقلة �
   if (rv.hookOk && sc.lines.length >= 5 && w >= 60 && sc.lines.at(-1)?.id === 'outro') break;
   notes = [...(rv.issues || []), `بعد شيل السطور اللي مالهاش سند فضل ${sc.lines.length} سطر و${w} كلمة — اكتب سطور أكتر من الحقايق المؤكدة F بس`];
 }
-if (!rv.hookOk) done('hook-unsupported', { topic: story.topic, issues: rv.issues });
+if (!rv.hookOk) await done('hook-unsupported', { topic: story.topic, issues: rv.issues });
 const nWords = sc.lines.map((l) => l.vo).join(' ').split(/\s+/).length;
-if (sc.lines.length < 5 || nWords < 60 || nWords > 145 || sc.lines.at(-1).id !== 'outro') done('script-shape', { topic: story.topic, nWords });
+if (sc.lines.length < 5 || nWords < 60 || nWords > 145 || sc.lines.at(-1).id !== 'outro') await done('script-shape', { topic: story.topic, nWords });
 for (const l of sc.lines) l.hi = (l.hi || []).filter((h) => h && l.vo.includes(h));
 
 // 3) رقم الفيديو + الفولدر
@@ -55,10 +60,11 @@ const num = String(Math.max(1, ...used) + 1).padStart(2, '0');
 const slug = (story.slug || 'news').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30) || 'news';
 const id = `${num}-${slug}`; const dir = path.join(ROOT, 'videos', id); fs.mkdirSync(path.join(dir, 'final'), { recursive: true });
 log(`🎬 ${id}: ${story.topic}`);
+if (!DRY) await tell(`🎬 بدأت فيديو جديد:\n«${story.topic}»\n(${new Set(story.sources.map((x) => x.paper)).size} جرايد)`);
 writeJson(path.join(dir, 'story.json'), { ...story, hooks: hk.all, scriptReview: rv.issues || [] });
 fs.writeFileSync(path.join(dir, 'sources.md'), `# ${story.topic}\n\n## الحقايق المؤكدة\n${factsText(story)}\n\n## المصادر\n${story.sources.map((s) => `- ${s.paper}: ${s.title} — ${s.url} (${s.date || ''})`).join('\n')}\n`);
 writeJson(path.join(dir, 'script.json'), { version: 2, lines: sc.lines });
-if (DRY) done('dry', { id, topic: story.topic });
+if (DRY) await done('dry', { id, topic: story.topic });
 
 // 4) صورة مرخصة (اختياري) + المشاهد
 const media = path.join(ROOT, 'motion/public/media'); fs.mkdirSync(media, { recursive: true });
@@ -71,12 +77,12 @@ for (let a = 0; a < 3; a++) {
   for (const s of sn.scenes) if (s.type === 'photo') { const p = photos.find((x) => x.src === s.src); Object.assign(s, { label: p.label, credit: p.credit, focusX: s.focusX ?? p.focusX }); }
   errs = checkScenes(sn, sc.lines); if (!errs.length) break; log(`⟳ المشاهد: ${errs.join(' | ')}`);
 }
-if (errs.length) done('scenes-failed', { id, errs });
+if (errs.length) await done('scenes-failed', { id, errs });
 const papers = [...new Set(story.sources.map((s) => s.paper))];
 writeJson(path.join(dir, 'scenes.json'), { trend: sn.trend, keep: sn.keep || [], sources: `المصادر: ${papers.join(' · ')}`, scenes: sn.scenes });
 
 // 5) الصوت (طلب واحد) + مراجعة الصوت
-try { await voice(dir, sc.lines, log); } catch (e) { if (e instanceof QuotaError) done('tts-quota', { id, error: e.message }); throw e; }
+try { await voice(dir, sc.lines, log); } catch (e) { if (e instanceof QuotaError) await done('tts-quota', { id, error: e.message }); throw e; }
 
 // 6) الخطة + الرندر (نسخة واحدة) + نسخة يوتيوب بالموسيقى (ffmpeg، من غير رندر تاني)
 execFileSync('python3', [path.join(ROOT, 'scripts/build_plan.py'), dir], { stdio: 'ignore' });
@@ -93,7 +99,7 @@ log(`🎞️ اترندر: ${plan.duration}ث`);
 
 // 7) مراجعة الفيديو النهائي
 const qa = await reviewFrames(social, plan, dir);
-if (!qa.pass) { log(`✗ مراجعة الجودة: ${(qa.problems || []).map((p) => `فريم ${p.frame}: ${p.issue}`).join(' | ')}`); done('qa-failed', { id, problems: qa.problems }); }
+if (!qa.pass) { log(`✗ مراجعة الجودة: ${(qa.problems || []).map((p) => `فريم ${p.frame}: ${p.issue}`).join(' | ')}`); await done('qa-failed', { id, problems: qa.problems }); }
 log('✓ مراجعة الجودة عدّت');
 
 // 8) فريق العناوين
@@ -130,4 +136,5 @@ writeJson(path.join(ROOT, 'queue', `${id}.json`), ticket);
 topics.push({ at: new Date().toISOString(), topic: story.topic, id }); writeJson(path.join(ROOT, 'data/topics.json'), topics.slice(-300));
 for (const p of photos) fs.rmSync(path.join(media, p.file), { force: true });
 log(`📬 في الطابور${ticket.approved ? ' (موافقة دائمة من صاحب القناة)' : ' — مستني موافقتك'}: ${Object.entries(ticket.platforms).map(([p, v]) => `${p} ${v.at}`).join(' · ')}`);
-done('queued', { id, topic: story.topic });
+await sendVideo(social, `✅ فيديو جاهز: ${t.youtube.title}\n${plan.duration} ثانية · مواعيد النشر: ${Object.entries(ticket.platforms).map(([p, v]) => `${p} ${new Date(v.at).toLocaleString('ar-EG', { timeZone: 'Africa/Cairo', hour: 'numeric', minute: '2-digit', weekday: 'short' })}`).join(' · ')}${ticket.approved ? '\n(موافقة دائمة — هيتنشر لوحده)' : '\nتنشره؟'}`, id);
+await done('queued', { id, topic: story.topic });
