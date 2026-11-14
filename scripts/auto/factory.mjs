@@ -4,7 +4,7 @@
 import fs from 'node:fs'; import path from 'node:path'; import { execFileSync } from 'node:child_process';
 import { ROOT, readJson, writeJson, cairoHour } from '../lib.mjs';
 import { pickStory } from './pick.mjs';
-import { hooks, script, reviewScript, scenes, checkScenes, fixScenes, factsText } from './write.mjs';
+import { hooks, script, reviewScript, scenes, checkScenes, fixScenes, photoMismatches, factsText } from './write.mjs';
 import { findPhotos } from './photo.mjs';
 import { voice, QuotaError } from './voice.mjs';
 import { reviewFrames } from './qa.mjs';
@@ -78,9 +78,12 @@ let sn; let errs = [];
 for (let a = 0; a < 3; a++) {
   sn = await scenes(story, sc.lines, photos.map((p) => ({ src: p.src, label: p.label, credit: p.credit, focusX: p.focusX, person: p.person })));
   sn.scenes = (sn.scenes || []).filter((s) => s.type !== 'photo' || photos.some((p) => p.src === s.src));
-  for (const s of sn.scenes) if (s.type === 'photo') { const p = photos.find((x) => x.src === s.src); Object.assign(s, { label: p.label, credit: p.credit, focusX: s.focusX ?? p.focusX }); }
+  for (const s of sn.scenes) if (s.type === 'photo') { const p = photos.find((x) => x.src === s.src); Object.assign(s, { label: p.label, credit: p.credit, person: p.person, focusX: s.focusX ?? p.focusX }); }
   errs = checkScenes(sn, sc.lines); if (!errs.length) break; log(`⟳ المشاهد: ${errs.join(' | ')}`);
 }
+// آخر حماية: أي صورة لسه على كلام مش عن صاحبها → تتحول لعنوان موشن (ما فيش صورة غلط تطلع أبدًا)
+const swapBad = (x) => { for (const s of photoMismatches(x, sc.lines)) { log(`🖼️ فريق الصور: شلت صورة ${s.person} من «${s.from}» (الكلام مش عنه)`); for (const k of ['src', 'label', 'credit', 'badge', 'zoom', 'focusX', 'person']) delete s[k]; s.type = 'headline'; s.title = s.title || story.topic.slice(0, 26); } errs = checkScenes(x, sc.lines); };
+if (errs.length && errs.every((e) => e.startsWith('صورة '))) swapBad(sn);
 if (errs.length) await done('scenes-failed', { id, errs });
 const papers = [...new Set(story.sources.map((s) => s.paper))];
 const photoList = photos.map((p) => ({ src: p.src, label: p.label, credit: p.credit, focusX: p.focusX, person: p.person }));
@@ -117,11 +120,12 @@ for (let round = 0; ; round++) {
     const cand = await fixScenes(story, sc.lines, sn, probs, photoList).catch((e) => (log(`⊘ الإصلاح: ${e.message}`), null));
     if (!cand) continue;
     cand.scenes = (cand.scenes || []).filter((s) => s.type !== 'photo' || photos.some((p) => p.src === s.src));
-    for (const s of cand.scenes) if (s.type === 'photo') { const p = photos.find((x) => x.src === s.src); Object.assign(s, { label: p.label, credit: p.credit, focusX: s.focusX ?? p.focusX }); }
+    for (const s of cand.scenes) if (s.type === 'photo') { const p = photos.find((x) => x.src === s.src); Object.assign(s, { label: p.label, credit: p.credit, person: p.person, focusX: s.focusX ?? p.focusX }); }
     const e2 = checkScenes(cand, sc.lines); if (e2.length) { log(`⟳ الإصلاح: ${e2.join(' | ')}`); continue; }
     fixed = cand;
   }
   if (!fixed) { if (probs.some((p) => HARD.test(p.issue))) await done('qa-failed', { id, problems: probs }); log('↪️ ما قدرناش نصلّح أكتر — الفيديو هيوصلك بملاحظات المراجعة'); break; }
+  if (photoMismatches(fixed, sc.lines).length) swapBad(fixed);
   sn = fixed; saveScenes(); fixes++;
 }
 const music = path.join(ROOT, 'assets/music/music.mp3');

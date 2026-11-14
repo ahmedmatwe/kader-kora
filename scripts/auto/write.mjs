@@ -48,7 +48,7 @@ export async function reviewScript(story, sc) {
 }
 
 const SCENES = `مكتبة المشاهد (type: props) — كل مشهد بيغطي سطر واحد (from=to=id السطر):
-- photo: {src,label,credit,title,accent?,badge?,zoom:"in"|"out",focusX:0-100} ← بس لو فيه صورة متاحة (هتتبعتلك)، وأحسن للسطر الأول.
+- photo: {src,label,credit,title,accent?,badge?,zoom:"in"|"out",focusX:0-100} ← صورة الشخص (person) تظهر بس على سطر بيذكر اسمه صراحة. ممنوع تحط صورة لاعب على كلام عن مدرب أو نتيجة أو ترتيب أو شخص تاني. لو مفيش سطر بيذكره، ما تستخدمش صورته خالص.
 - headline: {kicker?:"عاجل|مفاجأة|رسميًا", title, accent?, sub?}
 - score: {home,away,hs:number,as:number,sub:"البطولة\\nاليوم والتاريخ",note?}
 - versus: {title, a:{name,value:number,tag}, b:{name,value:number,tag}, winner:"a"|"b"}
@@ -71,8 +71,26 @@ export async function scenes(story, lines, photo) {
 
 const REQ = { photo: ['src', 'label', 'credit'], headline: ['title'], score: ['home', 'away', 'hs', 'as', 'sub'], versus: ['title', 'a', 'b'], claim: ['who', 'value', 'unit'], stat: ['value', 'label'], quote: ['who', 'text'], list: ['title', 'items'], flashback: ['from_year', 'to_year', 'title', 'detail'], verdict: ['title', 'yes', 'no'], end: ['cta'] };
 /** فحص آلي للمشاهد: الأنواع والـprops وتغطية كل السطور */
+// فريق مراجعة الصور: صورة الشخص لازم تكون على سطر بيذكر اسمه
+const STOP = new Set(['محمد', 'أحمد', 'احمد', 'عبد', 'علي', 'بن', 'أبو', 'ابو', 'الله']);
+export function nameIn(person, text) {
+  const norm = (x) => String(x || '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/[\u064B-\u0652]/g, '');
+  const t = norm(text); const toks = norm(person).split(/\s+/).filter((w) => w.length >= 3 && !STOP.has(w));
+  return (toks.length ? toks : [norm(person)]).some((w) => t.includes(w));
+}
+export function photoMismatches(sc, lines) {
+  const ids = lines.map((l) => l.id); const bad = [];
+  for (const s of sc.scenes || []) {
+    if (s.type !== 'photo' || !s.person) continue;
+    const a = ids.indexOf(s.from), b = ids.indexOf(s.to);
+    const text = lines.slice(Math.max(0, a), Math.max(a, b) + 1).map((l) => l.vo).join(' ');
+    if (!nameIn(s.person, text)) bad.push(s);
+  }
+  return bad;
+}
 export function checkScenes(sc, lines) {
   const ids = lines.map((l) => l.id); const errs = [];
+  for (const s of photoMismatches(sc, lines)) errs.push(`صورة ${s.person} محطوطة على كلام مش بيذكره (${s.from}) — حطها على سطر بيذكر اسمه أو شيلها`);
   for (const s of sc.scenes || []) {
     if (!REQ[s.type]) errs.push(`نوع مش معروف ${s.type}`);
     else for (const k of REQ[s.type]) if (s[k] == null || s[k] === '') errs.push(`${s.type} ناقصه ${k}`);
