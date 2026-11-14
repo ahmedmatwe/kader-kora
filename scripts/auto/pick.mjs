@@ -39,7 +39,11 @@ ${list}
 ${request ? `- صاحب القناة طالب الموضوع ده بالاسم: «${request}» — اختار القصص اللي عنه بس.\n` : ''}- رتّب حسب: قد إيه الناس مهتمة/بتبحث، جديدة، فيها رقم أو مفارقة أو جدل كروي مشروع.
 - استبعد أي قصة اتعملت قبل كده أو قريبة منها (نفس الحدث أو نفس الرقم أو نفس اللاعب في نفس الموضوع): ${recent.length ? recent.join(' | ') : 'مفيش'}
 رجّع JSON {"stories":[{"topic":"وصف القصة في سطر","slug":"english-slug-2-4-words","ids":[أرقام العناوين],"why":"ليه تريند","type":"news|match-reaction|evergreen","searched":true|false}]}`, { temp: 0.3, fast: true });
-  for (const s of r.stories || []) {
+  const stories = Array.isArray(r) ? r : (r.stories || []);
+  if (!stories.length) log(`⊘ رئيس التحرير ما اختارش قصص: ${JSON.stringify(r).slice(0, 200)}`);
+  for (const s of stories) {
+    const dup = recent.find((t) => overlap(t, s.topic) >= 0.3);
+    if (dup) { log(`⊘ «${s.topic}»: متعمل قبل كده («${dup.slice(0, 60)}»)`); continue; }
     const src = [...new Map((s.ids || []).map((i) => hits[i]).filter(Boolean).map((h) => [h.paper, h])).values()];
     if (src.length < 2) { log(`⊘ «${s.topic}»: مصدر واحد بس`); continue; }
     const v = await verify(s, src, log);
@@ -47,6 +51,11 @@ ${request ? `- صاحب القناة طالب الموضوع ده بالاسم: 
   }
   return null;
 }
+
+// تشابه المواضيع (كلمات مشتركة بعد شيل الحروف الزايدة) — حارس ضد التكرار مش معتمد على الموديل
+const STOP = new Set(['في', 'من', 'على', 'عن', 'بعد', 'مع', 'و', 'ال', 'منتخب', 'مصر', 'الى', 'إلى', 'أمام', 'امام', 'قبل', 'بين', 'هدف', 'هدفا']);
+const toks = (t) => new Set(String(t).replace(/[\u064B-\u0652]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').split(/[^\u0600-\u06FFa-z0-9]+/i).map((w) => w.replace(/^(وال|بال|لل|ال|و)/, '')).filter((w) => w.length > 2 && !STOP.has(w)));
+export function overlap(a, b) { const A = toks(a), B = toks(b); let n = 0; for (const w of A) if (B.has(w)) n++; return n / Math.max(1, Math.min(A.size, B.size)); }
 
 /** فريق التحقيق: يقرا المقالات نفسها ويطلّع الحقايق اللي متأكدة بس */
 export async function verify(story, src, log = console.log) {

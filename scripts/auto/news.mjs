@@ -5,7 +5,7 @@ export const TRUSTED = {
   'akhbarelyom.com': 'أخبار اليوم', 'shorouknews.com': 'الشروق', 'elbalad.news': 'صدى البلد', 'filgoal.com': 'في الجول', 'yallakora.com': 'يلا كورة',
 };
 const SITES = Object.keys(TRUSTED);
-const unxml = (s) => String(s ?? '').replace(/<!\[CDATA\[|\]\]>/g, '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/<[^>]+>/g, '').trim();
+const unxml = (s) => String(s ?? '').replace(/<!\[CDATA\[|\]\]>/g, '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n)).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/<[^>]+>/g, '').trim();
 export const paperOf = (u) => { try { const h = new URL(u).hostname.replace(/^www\./, '').replace(/^sport\./, ''); return TRUSTED[h] || TRUSTED[h.split('.').slice(-2).join('.')] || ''; } catch { return ''; } };
 
 async function bing(q, sited) {
