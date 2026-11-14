@@ -16,7 +16,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function call(models, parts, gen) {
   let last = '';
   for (let pass = 0; pass < 2; pass++) for (const m of models) for (const k of keys()) {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': k }, body: JSON.stringify({ contents: [{ parts }], generationConfig: gen }), signal: AbortSignal.timeout(180000) }).catch((e) => ({ ok: false, status: 0, json: async () => ({ error: { message: e.message } }) }));
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': k }, body: JSON.stringify({ contents: [{ parts }], generationConfig: gen }), signal: AbortSignal.timeout(90000) }).catch((e) => ({ ok: false, status: 0, json: async () => ({ error: { message: e.message } }) }));
     const j = await r.json().catch(() => ({}));
     const p = j.candidates?.[0]?.content?.parts; if (r.ok && p) return p;
     last = `${m} ${r.status} ${(j.error?.message || '').slice(0, 120)}`; await sleep(r.status === 429 ? 1500 : 2000);
@@ -24,9 +24,9 @@ async function call(models, parts, gen) {
   throw new Error(`Gemini فشل: ${last}`);
 }
 /** JSON مضمون (بيعيد لو الرد مش JSON) */
-export async function json(prompt, { light = false, temp = 0.5 } = {}) {
+export async function json(prompt, { light = false, temp = 0.5, fast = false } = {}) {
   for (let i = 0; i < 3; i++) {
-    const p = await call(light ? LIGHT : WRITE, [{ text: prompt }], { responseMimeType: 'application/json', temperature: temp });
+    const p = await call(light ? LIGHT : WRITE, [{ text: prompt }], { responseMimeType: 'application/json', temperature: temp, ...(fast || light ? { thinkingConfig: { thinkingBudget: 0 } } : {}) });
     try { return JSON.parse(p.map((x) => x.text || '').join('')); } catch {}
   }
   throw new Error('Gemini ما رجّعش JSON سليم');
@@ -34,7 +34,7 @@ export async function json(prompt, { light = false, temp = 0.5 } = {}) {
 /** رؤية: صورة/صور + سؤال → JSON */
 export async function vision(prompt, images) {
   const parts = [{ text: prompt }, ...images.map((f) => ({ inlineData: { mimeType: f.endsWith('.png') ? 'image/png' : 'image/jpeg', data: fs.readFileSync(f).toString('base64') } }))];
-  const p = await call(WRITE, parts, { responseMimeType: 'application/json', temperature: 0.1 });
+  const p = await call(LIGHT, parts, { responseMimeType: 'application/json', temperature: 0.1, thinkingConfig: { thinkingBudget: 0 } });
   return JSON.parse(p.map((x) => x.text || '').join(''));
 }
 /** تفريغ صوت (مراجعة إن الصوت قال النص بالظبط) */

@@ -38,7 +38,7 @@ ${list}
 - القصة لازم تكون مذكورة في جريدتين مختلفتين على الأقل (رقم العناوين من جرايد مختلفة).
 ${request ? `- صاحب القناة طالب الموضوع ده بالاسم: «${request}» — اختار القصص اللي عنه بس.\n` : ''}- رتّب حسب: قد إيه الناس مهتمة/بتبحث، جديدة، فيها رقم أو مفارقة أو جدل كروي مشروع.
 - استبعد أي قصة اتعملت قبل كده أو قريبة منها (نفس الحدث أو نفس الرقم أو نفس اللاعب في نفس الموضوع): ${recent.length ? recent.join(' | ') : 'مفيش'}
-رجّع JSON {"stories":[{"topic":"وصف القصة في سطر","slug":"english-slug-2-4-words","ids":[أرقام العناوين],"why":"ليه تريند","type":"news|match-reaction|evergreen","searched":true|false}]}`, { temp: 0.3 });
+رجّع JSON {"stories":[{"topic":"وصف القصة في سطر","slug":"english-slug-2-4-words","ids":[أرقام العناوين],"why":"ليه تريند","type":"news|match-reaction|evergreen","searched":true|false}]}`, { temp: 0.3, fast: true });
   for (const s of r.stories || []) {
     const src = [...new Map((s.ids || []).map((i) => hits[i]).filter(Boolean).map((h) => [h.paper, h])).values()];
     if (src.length < 2) { log(`⊘ «${s.topic}»: مصدر واحد بس`); continue; }
@@ -63,7 +63,7 @@ ${arts.map((a, i) => `### [${i}] ${a.paper} — ${a.title} (${a.date || 'تار�
 2) conflicts: أي أرقام أو معلومات مختلفة بين الجرايد.
 3) ok=false لو: شائعة مش مؤكدة، أو مخالفة للسياسة، أو القصة قديمة (أكتر من 3 أيام)، أو مفيش حقيقتين مؤكدتين.
 4) people: الأسماء الأساسية (لاعب/مدرب/نادي) بالإنجليزي زي ما مكتوبة في ويكيبيديا، عشان الصور.
-رجّع JSON {"ok":true,"reason":"","facts":[{"fact":"","papers":[""]}],"claim_single":[{"fact":"","paper":""}],"conflicts":[""],"people":[{"ar":"","en":""}],"next_match":{"name":"","when":""}|null}`, { temp: 0.1 });
+رجّع JSON {"ok":true,"reason":"","facts":[{"fact":"","papers":[""]}],"claim_single":[{"fact":"","paper":""}],"conflicts":[""],"people":[{"ar":"","en":""}],"next_match":{"name":"","when":""}|null}`, { temp: 0.1, fast: true });
   if (!r.ok || (r.facts || []).length < 2) { log(`⊘ «${story.topic}»: ${r.reason || 'حقايق مش كفاية'}`); return null; }
   log(`✓ القصة: «${story.topic}» — ${r.facts.length} حقيقة مؤكدة من ${new Set(arts.map((a) => a.paper)).size} جرايد`);
   return { ...story, ...r, sources: arts.map((a) => ({ paper: a.paper, title: a.title, url: a.url, date: a.date })) };

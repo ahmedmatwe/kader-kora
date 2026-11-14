@@ -21,7 +21,7 @@ export async function findPhoto(people, slug, dest, log = console.log) {
   for (const p of (people || []).slice(0, 2)) {
     const list = (await candidates(p.en)).filter((c) => !/logo|kit|stadium map|signature|svg|c[ée]l[ée]bration|team|squad|lineup|crowd|demonstration|DPLA|church|ship/i.test(c.title))
       .filter((c) => { const last = p.en.split(' ').pop().toLowerCase(); return last.length >= 3 && c.title.toLowerCase().includes(last); })
-      .sort((a, b) => Number(b.title.toLowerCase().includes(p.en.split(' ').pop().toLowerCase())) - Number(a.title.toLowerCase().includes(p.en.split(' ').pop().toLowerCase())) || b.w - a.w).slice(0, 4);
+      .sort((a, b) => Number(b.title.toLowerCase().includes(p.en.split(' ').pop().toLowerCase())) - Number(a.title.toLowerCase().includes(p.en.split(' ').pop().toLowerCase())) || b.w - a.w).slice(0, 3);
     for (const c of list) {
       const tmp = path.join(dest, `${slug}-cand.jpg`);
       const b = Buffer.from(await (await fetch(c.url, { headers: UA })).arrayBuffer()); fs.writeFileSync(tmp, b);
@@ -44,9 +44,10 @@ export async function findPhoto(people, slug, dest, log = console.log) {
 
 /** لحد 3 صور لأشخاص/أماكن مختلفة في القصة — عشان الفيديو يتنوّع بين لقطات حقيقية وموشن جرافيك */
 export async function findPhotos(people, slug, dest, log = console.log, max = 3) {
-  const out = [];
+  const out = []; const t0 = Date.now();
   for (const [i, p] of (people || []).slice(0, 5).entries()) {
     if (out.length >= max) break;
+    if (Date.now() - t0 > 4 * 60e3) { log('⏱️ وقت الصور خلص — بنكمل باللي لقيناه'); break; }
     const ph = await findPhoto([p], `${slug}-${i + 1}`, dest, log).catch(() => null);
     if (ph) out.push(ph);
   }

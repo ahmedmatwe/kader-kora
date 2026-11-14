@@ -58,7 +58,7 @@ export const Captions: React.FC<{ items: Caption[]; fps: number }> = ({ items, f
 
 /** شارة «صورة أرشيفية» / «رسم توضيحي» + الحقوق */
 export const PhotoLabel: React.FC<{ label: string; credit: string }> = ({ label, credit }) => (
-  <div style={{ position: 'absolute', top: SAFE.top + 190, right: SAFE.right, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+  <div style={{ position: 'absolute', top: SAFE.top + 175, right: SAFE.right, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
     <div style={{ ...ar, fontSize: 30, fontWeight: 800, background: 'rgba(0,0,0,0.65)', padding: '4px 16px', borderRadius: 10 }}>{label}</div>
     <div style={{ fontFamily: FONT, fontSize: 24, color: '#ddd', background: 'rgba(0,0,0,0.5)', padding: '2px 10px', borderRadius: 8, direction: 'ltr' }}>{credit}</div>
   </div>

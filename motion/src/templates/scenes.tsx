@@ -4,7 +4,7 @@ import { AbsoluteFill, Img, staticFile, useCurrentFrame, interpolate, Easing } f
 import { C, SAFE, ar, Num, useIn, BrandBg } from './brand';
 import { PhotoLabel } from './parts';
 
-const Title: React.FC<{ text: string; accent?: string; top?: number; size?: number; delay?: number }> = ({ text, accent, top = SAFE.top + 160, size = 84, delay = 0 }) => {
+const Title: React.FC<{ text: string; accent?: string; top?: number; size?: number; delay?: number }> = ({ text, accent, top = SAFE.top + 220, size = 84, delay = 0 }) => {
   const p = useIn(delay);
   const parts = accent ? text.split(accent) : [text];
   return (
@@ -76,7 +76,7 @@ export const VersusScene: React.FC<{ title: string; a: { name: string; value: nu
   return (
     <AbsoluteFill>
       <BrandBg />
-      <Title text={title} top={SAFE.top + 140} size={70} />
+      <Title text={title} top={SAFE.top + 200} size={70} />
       <div style={{ position: 'absolute', top: 560, left: SAFE.left - 20, right: SAFE.right, display: 'flex', direction: 'rtl', justifyContent: 'space-between' }}>
         <Card d={a} win={winner === 'a'} delay={4} />
         <Card d={b} win={winner === 'b'} delay={10} />
@@ -132,7 +132,7 @@ export const SubsScene: React.FC<{ count: number; title: string; note: string }>
   return (
     <AbsoluteFill>
       <BrandBg />
-      <Title text={title} top={SAFE.top + 140} size={68} />
+      <Title text={title} top={SAFE.top + 200} size={68} />
       <div style={{ position: 'absolute', top: 560, left: 130, right: 240, display: 'flex', flexWrap: 'wrap', direction: 'rtl', gap: 22, justifyContent: 'center' }}>
         {Array.from({ length: count }).map((_, i) => (
           <div key={i} style={{ width: 120, height: 120, borderRadius: 22, background: i < shown ? 'rgba(255,255,255,0.12)' : 'transparent', border: `3px solid ${i < shown ? C.white : 'transparent'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 64, transform: `scale(${i < shown ? 1 : 0.4})`, opacity: i < shown ? 1 : 0 }}>
@@ -163,7 +163,7 @@ export const VerdictScene: React.FC<{ title: string; yes: { cond: string; res: s
   return (
     <AbsoluteFill>
       <BrandBg />
-      <Title text={title} top={SAFE.top + 140} size={70} />
+      <Title text={title} top={SAFE.top + 200} size={70} />
       <div style={{ position: 'absolute', top: 540, left: SAFE.left, right: SAFE.right, display: 'flex', flexDirection: 'column', gap: 40 }}>
         <Row d={yes} color={C.gold} delay={4} />
         <Row d={no} color={C.mute} delay={noDelay} />
