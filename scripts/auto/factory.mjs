@@ -101,7 +101,7 @@ let plan; let qa; let fixes = 0;
 for (let round = 0; ; round++) {
   execFileSync('python3', [path.join(ROOT, 'scripts/build_plan.py'), dir], { stdio: 'ignore' });
   plan = readJson(path.join(dir, 'build/plan.json'));
-  fs.copyFileSync(path.join(dir, 'build/voice.wav'), path.join(media, 'voice.wav'));
+  fs.copyFileSync(path.join(dir, 'voice/full.wav'), path.join(media, 'voice.wav'));
   log(round ? `🎞️ برندر تاني بعد الإصلاح (${round})` : '🎞️ بعمل الرندر (موشن + صور)');
   execFileSync('npx', ['remotion', 'render', 'src/index.ts', 'NewsShort', social, `--props=${path.join(dir, 'build/plan.json')}`, '--codec=h264', '--crf=19', '--audio-bitrate=192k', '--log=error', `--concurrency=${process.env.RENDER_CONCURRENCY || '100%'}`], { cwd: path.join(ROOT, 'motion'), stdio: 'inherit' });
   log(`🎞️ اترندر: ${plan.duration}ث`);
