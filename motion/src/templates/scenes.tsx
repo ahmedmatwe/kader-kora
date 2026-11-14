@@ -243,7 +243,7 @@ const ListRow: React.FC<{ text: string; n: number; delay: number }> = ({ text, n
   const p = useIn(delay);
   return (
     <div style={{ display: 'flex', direction: 'rtl', alignItems: 'center', gap: 24, opacity: p, transform: `translateX(${(1 - p) * -80}px)` }}>
-      <div style={{ minWidth: 84, height: 84, borderRadius: 42, background: C.red, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Num style={{ fontSize: 50 }}>{String(n)}</Num></div>
+      <div style={{ minWidth: 72, height: 72, borderRadius: 36, background: C.red, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><svg width="44" height="44" viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#fff" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" /></svg></div>
       <div style={{ ...ar, fontSize: 50, fontWeight: 800, lineHeight: 1.3, background: 'rgba(255,255,255,0.08)', borderRadius: 18, padding: '14px 26px', flex: 1 }}>{text}</div>
     </div>
   );
