@@ -33,12 +33,18 @@ if (!story) done('no-story');
 // 2) هوك → سيناريو → مراجعة مستقلة
 const hk = await hooks(story); if (!hk.best) done('no-hook', { topic: story.topic });
 log(`🪝 الهوك: ${hk.best}`);
-let sc = await script(story, hk.best);
-const rv = await reviewScript(story, sc);
-if (rv.issues?.length) log(`🔎 مراجعة السيناريو: ${rv.issues.join(' | ')}`);
-if (rv.dropped) log(`✂️ المراجع شال ${rv.dropped} سطر مالوش سند`);
+let sc; let rv; let notes = [];
+for (let a = 0; a < 3; a++) { // سيناريو → مراجعة مستقلة → إعادة كتابة بملاحظات المراجع لحد ما يعدّي
+  const draft = await script(story, hk.best, notes);
+  rv = await reviewScript(story, draft);
+  if (rv.issues?.length) log(`🔎 مراجعة السيناريو (${a + 1}): ${rv.issues.join(' | ')}`);
+  if (rv.dropped) log(`✂️ المراجع شال ${rv.dropped} سطر مالوش سند`);
+  sc = { lines: rv.lines.map(({ support, ...l }) => l) };
+  const w = sc.lines.map((l) => l.vo).join(' ').split(/\s+/).length;
+  if (rv.hookOk && sc.lines.length >= 5 && w >= 60 && sc.lines.at(-1)?.id === 'outro') break;
+  notes = [...(rv.issues || []), `بعد شيل السطور اللي مالهاش سند فضل ${sc.lines.length} سطر و${w} كلمة — اكتب سطور أكتر من الحقايق المؤكدة F بس`];
+}
 if (!rv.hookOk) done('hook-unsupported', { topic: story.topic, issues: rv.issues });
-sc = { lines: rv.lines.map(({ support, ...l }) => l) };
 const nWords = sc.lines.map((l) => l.vo).join(' ').split(/\s+/).length;
 if (sc.lines.length < 5 || nWords < 60 || nWords > 145 || sc.lines.at(-1).id !== 'outro') done('script-shape', { topic: story.topic, nWords });
 for (const l of sc.lines) l.hi = (l.hi || []).filter((h) => h && l.vo.includes(h));
