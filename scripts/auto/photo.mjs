@@ -8,7 +8,7 @@ const OK_LIC = /^(CC BY(-SA)? [234]\.0|CC0|Public domain|PD)/i;
 const strip = (s) => String(s || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
 
 async function candidates(q) {
-  const u = `${API}?action=query&format=json&generator=search&gsrnamespace=6&gsrlimit=20&gsrsearch=${encodeURIComponent(`${q} filetype:bitmap`)}&prop=imageinfo&iiprop=url|size|extmetadata|mime&iiurlwidth=1280`;
+  const u = `${API}?action=query&format=json&generator=search&gsrnamespace=6&gsrlimit=20&gsrsearch=${encodeURIComponent(`"${q}" filetype:bitmap`)}&prop=imageinfo&iiprop=url|size|extmetadata|mime&iiurlwidth=1280`;
   const j = await (await fetch(u, { headers: UA })).json().catch(() => ({}));
   return Object.values(j.query?.pages || {}).map((p) => {
     const i = p.imageinfo?.[0] || {}; const m = i.extmetadata || {};
@@ -19,7 +19,8 @@ async function candidates(q) {
 /** يرجّع {src,label,credit,file} أو null. dest = فولدر motion/public/media */
 export async function findPhoto(people, slug, dest, log = console.log) {
   for (const p of (people || []).slice(0, 2)) {
-    const list = (await candidates(p.en)).filter((c) => !/logo|kit|stadium map|signature|svg|c[ée]l[ée]bration|team|squad|lineup|crowd/i.test(c.title))
+    const list = (await candidates(p.en)).filter((c) => !/logo|kit|stadium map|signature|svg|c[ée]l[ée]bration|team|squad|lineup|crowd|demonstration|DPLA|church|ship/i.test(c.title))
+      .filter((c) => { const last = p.en.split(' ').pop().toLowerCase(); return last.length >= 3 && c.title.toLowerCase().includes(last); })
       .sort((a, b) => Number(b.title.toLowerCase().includes(p.en.split(' ').pop().toLowerCase())) - Number(a.title.toLowerCase().includes(p.en.split(' ').pop().toLowerCase())) || b.w - a.w).slice(0, 4);
     for (const c of list) {
       const tmp = path.join(dest, `${slug}-cand.jpg`);

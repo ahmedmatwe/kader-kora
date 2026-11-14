@@ -14,3 +14,9 @@ export async function sendVideo(file, caption, id) {
   const r = await fetch(`https://api.telegram.org/bot${T}/sendVideo`, { method: 'POST', body: fd }).catch(() => null);
   if (!r?.ok) await tell(`${caption}\n(الفيديو كبير على تليجرام — شوفه في GitHub)`, [{ text: '✅ انشر', callback_data: `ok:${id}` }, { text: '❌ الغي', callback_data: `no:${id}` }]);
 }
+
+/** الحالة اللحظية للبوت (شغالين في إيه دلوقتي) — BOT_URL + BOT_INGEST_SECRET */
+export async function live(info) {
+  const U = process.env.BOT_URL, K = process.env.BOT_INGEST_SECRET; if (!U || !K) return;
+  await fetch(`${U}/ingest`, { method: 'POST', headers: { authorization: `Bearer ${K}`, 'content-type': 'application/json' }, body: JSON.stringify({ live: info }) }).catch(() => {});
+}

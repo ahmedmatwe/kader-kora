@@ -9,16 +9,17 @@ import { findPhotos } from './photo.mjs';
 import { voice, QuotaError } from './voice.mjs';
 import { reviewFrames } from './qa.mjs';
 import { makeTitles } from './titles.mjs';
-import { tell, sendVideo } from './notify.mjs';
+import { tell, sendVideo, live } from './notify.mjs';
 const DRY = process.argv.includes('--dry');
 const FF = fs.existsSync('/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg') ? '/opt/homebrew/opt/ffmpeg-full/bin/' : '';
 const LOGF = path.join(ROOT, 'data/factory.json'); const flog = readJson(LOGF, { runs: [] });
 const cfg = readJson(path.join(ROOT, 'data/config.json'), { autoApprove: false, dailyTarget: 12, platforms: ['youtube', 'facebook', 'instagram'] });
-const T0 = Date.now(); const lines = []; const log = (s) => { const m = `[${((Date.now() - T0) / 60000).toFixed(1)}د] ${s}`; console.log(m); lines.push(s); };
+const T0 = Date.now(); const lines = []; const cur = { topic: '', id: '' };
+const log = (s) => { const m = `[${((Date.now() - T0) / 60000).toFixed(1)}د] ${s}`; console.log(m); lines.push(s); live({ ...cur, stage: s.slice(0, 200) }); };
 const QUIET_STATUS = ['disabled', 'daily-target-reached', 'no-story', 'dry'];
 const done = async (status, extra = {}) => { if (!QUIET_STATUS.includes(status) && status !== 'queued') await tell(`⚠️ فيديو ما كملش (${status})${extra.topic ? `\n«${extra.topic}»` : ''}\n${lines.slice(-2).join('\n')}`); flog.runs.push({ at: new Date().toISOString(), status, ...extra, log: lines.slice(-40) });
   if (!['queued', 'dry'].includes(status) && extra.id) fs.rmSync(path.join(ROOT, 'videos', extra.id), { recursive: true, force: true }); // فيديو ما كملش ما يفضلش في الريبو
-  flog.runs = flog.runs.slice(-200); writeJson(LOGF, flog); console.log(`\n== ${status}`); process.exit(0); };
+  flog.runs = flog.runs.slice(-200); await live({ ...cur, stage: `خلصت الدورة: ${status}` }); writeJson(LOGF, flog); console.log(`\n== ${status}`); process.exit(0); };
 
 if (!cfg.enabled) await done('disabled');
 // حد يومي (الكوتة): ما نعملش أكتر من dailyTarget في اليوم
@@ -33,6 +34,7 @@ const onErr = async (e) => { if (globalThis.__vid) fs.rmSync(path.join(ROOT, 'vi
 process.on('unhandledRejection', onErr); process.on('uncaughtException', onErr);
 const requests = readJson(path.join(ROOT, 'data/requests.json'), []);
 const req = requests.find((r) => r.status === 'pending');
+log('🔎 بدوّر على أقوى تريند في الجرايد الكبيرة');
 const story = await pickStory({ recent, log, request: req?.text });
 if (req) { req.status = story ? 'done' : 'not-found'; req.at2 = new Date().toISOString(); writeJson(path.join(ROOT, 'data/requests.json'), requests); if (!story) await tell(`🔎 الموضوع اللي طلبته «${req.text}» ما لقيتهوش في جريدتين كبار — مش هعمله عشان المصداقية.`); }
 if (!story) await done('no-story');
@@ -61,7 +63,7 @@ const used = [...fs.readdirSync(path.join(ROOT, 'videos')), ...fs.readdirSync(pa
 const num = String(Math.max(1, ...used) + 1).padStart(2, '0');
 const slug = (story.slug || 'news').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30) || 'news';
 const id = `${num}-${slug}`; const dir = path.join(ROOT, 'videos', id); fs.mkdirSync(path.join(dir, 'final'), { recursive: true });
-log(`🎬 ${id}: ${story.topic}`); globalThis.__vid = id;
+Object.assign(cur, { topic: story.topic, id }); log(`🎬 ${id}: ${story.topic}`); globalThis.__vid = id;
 if (!DRY) await tell(`🎬 بدأت فيديو جديد:\n«${story.topic}»\n(${new Set(story.sources.map((x) => x.paper)).size} جرايد)`);
 writeJson(path.join(dir, 'story.json'), { ...story, hooks: hk.all, scriptReview: rv.issues || [] });
 fs.writeFileSync(path.join(dir, 'sources.md'), `# ${story.topic}\n\n## الحقايق المؤكدة\n${factsText(story)}\n\n## المصادر\n${story.sources.map((s) => `- ${s.paper}: ${s.title} — ${s.url} (${s.date || ''})`).join('\n')}\n`);
@@ -84,6 +86,7 @@ const papers = [...new Set(story.sources.map((s) => s.paper))];
 writeJson(path.join(dir, 'scenes.json'), { trend: sn.trend, keep: sn.keep || [], sources: `المصادر: ${papers.join(' · ')}`, scenes: sn.scenes });
 
 // 5) الصوت (طلب واحد) + مراجعة الصوت
+log('🎙️ بسجّل الصوت');
 try { await voice(dir, sc.lines, log); } catch (e) { if (e instanceof QuotaError) await done('tts-quota', { id, error: e.message }); throw e; }
 
 // 6) الخطة + الرندر (نسخة واحدة) + نسخة يوتيوب بالموسيقى (ffmpeg، من غير رندر تاني)
@@ -91,6 +94,7 @@ execFileSync('python3', [path.join(ROOT, 'scripts/build_plan.py'), dir], { stdio
 fs.copyFileSync(path.join(dir, 'build/voice.wav'), path.join(media, 'voice.wav'));
 const plan = readJson(path.join(dir, 'build/plan.json'));
 const social = path.join(dir, 'final', `${id}-social.mp4`); const yt = path.join(dir, 'final', `${id}-youtube.mp4`);
+log('🎞️ بعمل الرندر (موشن + صور)');
 execFileSync('npx', ['remotion', 'render', 'src/index.ts', 'NewsShort', social, `--props=${path.join(dir, 'build/plan.json')}`, '--codec=h264', '--crf=19', '--audio-bitrate=192k', '--log=error', `--concurrency=${process.env.RENDER_CONCURRENCY || '100%'}`], { cwd: path.join(ROOT, 'motion'), stdio: 'inherit' });
 const music = path.join(ROOT, 'assets/music/music.mp3');
 execFileSync(`${FF}ffmpeg`, ['-loglevel', 'error', '-y', '-i', social, '-stream_loop', '-1', '-i', music, '-filter_complex', `[1:a]volume=0.07,afade=t=in:d=0.5,afade=t=out:st=${Math.max(0, plan.duration - 1.2)}:d=1.2[m];[0:a][m]amix=inputs=2:duration=first:normalize=0[a]`, '-map', '0:v', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-shortest', yt]);
@@ -100,6 +104,7 @@ fs.writeFileSync(path.join(dir, 'final', `${id}.ar.srt`), plan.captions.map((c, 
 log(`🎞️ اترندر: ${plan.duration}ث`);
 
 // 7) مراجعة الفيديو النهائي
+log('🧐 مراجعة الجودة النهائية');
 const qa = await reviewFrames(social, plan, dir);
 if (!qa.pass) { log(`✗ مراجعة الجودة: ${(qa.problems || []).map((p) => `فريم ${p.frame}: ${p.issue}`).join(' | ')}`); await done('qa-failed', { id, problems: qa.problems }); }
 log('✓ مراجعة الجودة عدّت');

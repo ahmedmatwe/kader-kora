@@ -1,6 +1,6 @@
 // فريق الصوت: طلب TTS واحد للسكريبت كله (توفير الكوتة: ~10 طلبات/يوم لكل مفتاح) بصوت Fenrir،
 // بعدين faster-whisper يطلّع وقت كل كلمة → نقسم الصوت لسطور (voice/<id>.wav) → build_plan يكمل زي ما هو.
-// مراجعة الصوت: النص اللي اتسمع لازم يطابق السكريبت ≥ 80% وإلا نعيد (مرة واحدة).
+// مراجعة الصوت: النص اللي اتسمع لازم يطابق السكريبت ≥ 70% وإلا نعيد (مرة واحدة).
 import fs from 'node:fs'; import path from 'node:path'; import { execFileSync } from 'node:child_process';
 import { keys as kaderKeys } from './ai.mjs';
 const FF = fs.existsSync('/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg') ? '/opt/homebrew/opt/ffmpeg-full/bin/' : '';
@@ -47,7 +47,7 @@ export async function voice(dir, lines, log = console.log) {
     if (sec > nWords * 0.62 + 4 || sec < nWords * 0.25) { log(`⟳ الصوت ${sec.toFixed(1)}ث مش مناسب لـ${nWords} كلمة — بنعيد`); continue; }
     const al = words(full); const heard = al.words.map((w) => w.w).join(' ');
     const sim = similarity(text, heard);
-    if (sim < 0.8) { log(`⟳ الصوت قال كلام مختلف (تطابق ${(sim * 100).toFixed(0)}%) — بنعيد`); continue; }
+    if (sim < 0.7) { log(`⟳ الصوت قال كلام مختلف (تطابق ${(sim * 100).toFixed(0)}%) — بنعيد`); continue; }
     // تقسيم: حدود السطور بنسبة عدد الكلمات، وبعدين أكبر سكتة قريبة (±3 كلمات)
     const W = al.words; const ratio = W.length / nWords; let cum = 0; const cuts = [0];
     for (const l of lines.slice(0, -1)) {

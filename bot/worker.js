@@ -74,6 +74,18 @@ const TOOLS = {
     return (data.runs || []).slice(-8).map((r) => ({ at: cairo(r.at), status: r.status, id: r.id, topic: r.topic, last: (r.log || []).slice(-3) }));
   },
   async settings(env) { return (await getJson(env, 'data/config.json', {})).data; },
+  async now_working(env) {
+    const live = JSON.parse((await env.MEM.get('live')) || 'null');
+    const runs = await (await fetch(`${GH}/repos/${REPO}/actions/runs?status=in_progress&per_page=5`, { headers: ghH(env) })).json();
+    const running = (runs.workflow_runs || []).map((r) => ({ workflow: r.name, since: cairo(r.run_started_at) }));
+    const { data } = await getJson(env, 'data/factory.json', { runs: [] }); const last = (data.runs || []).at(-1);
+    return { running_now: running, live_stage: live && { topic: live.topic, stage: live.stage, video: live.id, updated: cairo(live.at) }, last_finished: last && { at: cairo(last.at), status: last.status, topic: last.topic } };
+  },
+  async run_workflow(env, { name }) { const ok = ['factory', 'publish', 'stats', 'comments'].includes(name) && await dispatch(env, `${name}.yml`); return { ok }; },
+  async dev_request(env, { text }) {
+    const r = await fetch(`${GH}/repos/${REPO}/issues`, { method: 'POST', headers: ghH(env), body: JSON.stringify({ title: `طلب تطوير: ${text.slice(0, 80)}`, body: `طلب صاحب القناة من تليجرام (${cairo(new Date().toISOString())}):\n\n${text}`, labels: ['طلب'] }) });
+    return r.ok ? { ok: true, note: 'اتسجل طلب تطوير — هيتنفذ في جلسة التطوير' } : { error: `GitHub ${r.status}` };
+  },
   async add_topic(env, { text }) {
     await putJson(env, 'data/requests.json', (d) => [...(Array.isArray(d) ? d : []), { at: new Date().toISOString(), text, status: 'pending' }], `موضوع جديد: ${text}`, []);
     return { ok: true, note: 'اتضاف — المصنع هياخده أول ما يدوّر على قصة (لازم يلاقيه في جريدتين كبار على الأقل)' };
@@ -109,6 +121,9 @@ async function editTicket(env, id, fn, msg) { const T = await tickets(env); cons
 const CONFIRM = new Set(['approve', 'cancel', 'reschedule', 'delete_video', 'set_setting']);
 
 const DECL = [
+  ['now_working', 'المصنع شغال على إيه دلوقتي: الموضوع والمرحلة اللحظية، وآخر فيديو خلص', {}],
+  ['run_workflow', 'تشغيل حاجة على السحابة دلوقتي: factory (فيديو جديد) أو publish (نشر اللي عليه الدور) أو stats (تحديث الأرقام) أو comments (الرد على الكومنتات)', { name: 'string' }],
+  ['dev_request', 'تسجيل طلب لصاحب القناة محتاج تعديل في الكود/طريقة الشغل (أي حاجة الأدوات مش بتعملها) عشان يتنفذ في جلسة التطوير', { text: 'string' }],
   ['queue_status', 'حالة كل الفيديوهات في الطابور (مستنية موافقة/متجدولة/منشورة) ومواعيدها', {}],
   ['unpublished', 'الفيديوهات اللي لسه ما اتنشرتش على منصة أو أكتر', {}],
   ['followers', 'عدد المتابعين/المشتركين على يوتيوب وفيسبوك وإنستجرام (وتيك توك لو متاح)', {}],
@@ -129,7 +144,9 @@ const SYSTEM = `إنت «مساعد كادر كورة» — المدير الت�
 - اتكلم بالمصري، ودود وقصير وواضح (أرقام وحالات، من غير رغي). من غير ماركداون معقد.
 - افهم المقصود حتى لو الكلام مختصر أو فيه أخطاء، واستخدم الأدوات تجيب الداتا الحقيقية — عمرك ما تخترع رقم أو حالة.
 - أي طلب تنفيذ (نشر، إلغاء، مسح، ميعاد، إعداد) نفّذه بالأداة المناسبة — هيظهر لصاحب القناة زرار تأكيد.
-- لو الطلب مش متاح بالأدوات (تعديل كود، فكرة جديدة كبيرة): قول بصراحة إنه محتاج يتعمل من جلسة التطوير، وسجّله بـadd_topic لو هو فكرة فيديو.
+- «شغالين في إيه» → now_working وقول الموضوع والمرحلة بالظبط.
+- لو الطلب مش متاح بالأدوات (تعديل في طريقة الشغل، شكل الفيديو، فريق جديد...): سجّله بـdev_request وقول إنه اتسجل وهيتنفذ في جلسة التطوير. لو فكرة فيديو → add_topic.
+- ما ترفضش أي طلب من غير ما تحاول بالأدوات أو تسجّله.
 - قواعد القناة ثابتة: مصادر من الجرايد المصرية الكبيرة بس، مفيش شائعات، صور محتشمة بس.
 - الوقت بتوقيت القاهرة.`;
 
@@ -195,19 +212,24 @@ export default {
       const r = await tg(env, 'setWebhook', { url: `${url.origin}/tg`, secret_token: env.WEBHOOK_SECRET, allowed_updates: ['message', 'callback_query'] });
       return Response.json(r);
     }
+    if (url.pathname === '/ingest' && req.method === 'POST' && req.headers.get('authorization') === `Bearer ${env.INGEST_SECRET}`) {
+      const b = await req.json(); if (b.live) await env.MEM.put('live', JSON.stringify({ ...b.live, at: new Date().toISOString() }), { expirationTtl: 7200 });
+      return Response.json({ ok: true });
+    }
     if (url.pathname !== '/tg' || req.headers.get('x-telegram-bot-api-secret-token') !== env.WEBHOOK_SECRET) return new Response('kader-kora-bot');
     const u = await req.json();
     const chat = String(u.message?.chat?.id ?? u.callback_query?.message?.chat?.id ?? '');
     if (chat !== String(env.CHAT_ID)) return new Response('ok'); // صاحب القناة بس
-    ctx.waitUntil((async () => {
-      try {
-        if (u.callback_query) return await onButton(env, u.callback_query);
-        const text = u.message?.text?.trim(); if (!text) return;
-        if (text === '/start') return await say(env, 'أهلا يا كابتن 👋 أنا مساعد «كادر كورة». اسألني عن أي حاجة (المتابعين، النتايج، اللي مستني نشر) أو قولّي أعمل إيه.');
-        await tg(env, 'sendChatAction', { chat_id: env.CHAT_ID, action: 'typing' });
-        await agent(env, text);
-      } catch (e) { await say(env, `حصلت مشكلة: ${String(e.message).slice(0, 200)}`); }
-    })());
+    const uid = String(u.update_id); if (await env.MEM.get(`u:${uid}`)) return new Response('ok'); // تليجرام ساعات بيعيد نفس الرسالة
+    await env.MEM.put(`u:${uid}`, '1', { expirationTtl: 3600 });
+    try {
+      if (u.callback_query) await onButton(env, u.callback_query);
+      else {
+        const text = u.message?.text?.trim();
+        if (text === '/start') await say(env, 'أهلا يا كابتن 👋 أنا مساعد «كادر كورة». اسألني عن أي حاجة (شغالين في إيه، المتابعين، النتايج، اللي مستني نشر) أو قولّي أعمل إيه.');
+        else if (text) { await tg(env, 'sendChatAction', { chat_id: env.CHAT_ID, action: 'typing' }); await agent(env, text); }
+      }
+    } catch (e) { console.log('ERR', e.stack || e); await say(env, `حصلت مشكلة: ${String(e.message).slice(0, 200)}`); }
     return new Response('ok');
   },
 };
