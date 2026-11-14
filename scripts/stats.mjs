@@ -26,12 +26,24 @@ if (yt.length && secret('youtube')) {
     upsert(row);
   }
   writeJson(P, db);
-} else console.log('ℹ️ يوتيوب لسه مش متربط أو مفيش منشورات — التقرير من الداتا المسجلة بس');
+}
+// فيس وإنستا
+try {
+  const meta = await import('./meta.mjs'); const c = meta.metaCreds();
+  for (const led of posts().filter((p) => p.platform === 'facebook' || p.platform === 'instagram')) {
+    const st = await meta.stats(led.platform, led.id, c); const age = (Date.now() - new Date(led.publishAt)) / 3600e3;
+    const old = db.posts.find((x) => x.platform === led.platform && x.id === led.id);
+    upsert({ platform: led.platform, id: led.id, video: led.video, publishedAt: led.publishAt, ...st, ...(age >= 24 && old?.views24h == null ? { views24h: st.views } : {}), updatedAt: new Date().toISOString() });
+  }
+  writeJson(P, db);
+} catch (e) { console.log('ℹ️ فيس/إنستا:', e.message); }
+if (false) {
+} else if (!yt.length) console.log('ℹ️ يوتيوب لسه مش متربط أو مفيش منشورات — التقرير من الداتا المسجلة بس');
 // التقرير
 if (!db.posts.length) { console.log('مفيش داتا لسه. أول تقرير بعد أول منشور بـ24 ساعة.'); process.exit(0); }
 console.log('\n📊 تقرير الأداء'); for (const r of [...db.posts].sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt)))
   console.log(`${r.platform.padEnd(9)} ${r.video.padEnd(16)} ${cairoStr(r.publishedAt)} | مشاهدات ${r.views ?? r.views24h ?? '-'}${r.avgViewPct != null ? ` | بيتفرج ${Math.round(r.avgViewPct)}%` : ''} | لايك ${r.likes ?? '-'} | كومنت ${r.comments ?? '-'}`);
 const byHour = {}; for (const r of db.posts.filter((x) => x.views24h != null)) (byHour[`${r.platform} ${cairoHour(r.publishedAt)}:00`] ||= []).push(r.views24h);
 if (Object.keys(byHour).length) { console.log('\n⏰ متوسط المشاهدات أول 24 ساعة حسب ساعة النشر:'); for (const [k, v] of Object.entries(byHour).sort()) console.log(`  ${k}  →  ${Math.round(v.reduce((a, b) => a + b, 0) / v.length)} (${v.length} منشور)`); }
-const low = db.posts.filter((r) => r.avgViewPct != null && r.avgViewPct < 60);
+const low = db.posts.filter((r) => r.avgViewPct != null && (r.views ?? 0) >= 100 && r.avgViewPct < 60); // ما نحكمش على فيديو لسه ما اتفرجش
 if (low.length) console.log(`\n💡 لفريق السيناريو والموشن: ${low.length} فيديو نسبة المشاهدة فيه أقل من 60% — الافتتاحية محتاجة تبقى أسرع وأقصر.`);
