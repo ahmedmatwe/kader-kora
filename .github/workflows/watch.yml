@@ -1,5 +1,5 @@
 name: watch
-# 🛡️ فريق متابعة النفي: كل 10 دقايق يراجع أخبارنا آخر 3 أيام. خبر اتنفى → يلغي اللي ما نزلش + فيديو نفي على طول.
+# 🛡️ فريق متابعة النفي لحظة بلحظة: جولة كل 3 دقايق، 50 دقيقة، وبعدين يشغّل نفسه تاني (والكرون احتياطي) يراجع أخبارنا آخر 3 أيام. خبر اتنفى → يلغي اللي ما نزلش + فيديو نفي على طول.
 on:
   schedule: [{ cron: '*/10 * * * *' }]
   workflow_dispatch:
@@ -8,7 +8,7 @@ permissions: { contents: write, actions: write }
 jobs:
   watch:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -21,7 +21,11 @@ jobs:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
-        run: node scripts/auto/watch.mjs
+          GH_TOKEN: ${{ github.token }}
+          LOOP_MIN: '50'
+        run: |
+          git config user.name "kader-watch"; git config user.email "watch@users.noreply.github.com"
+          node scripts/auto/watch.mjs
       - name: حفظ + تشغيل فيديو النفي
         if: always()
         env: { GH_TOKEN: '${{ github.token }}' }
@@ -31,3 +35,4 @@ jobs:
           git diff --cached --quiet || git commit -qm "متابعة النفي"
           for i in 1 2 3 4 5 6; do git pull -q --rebase -X theirs && git push -q && break; sleep $((i*5)); done
           if [ "$(cat /tmp/watch-dispatch 2>/dev/null)" = yes ]; then gh workflow run factory.yml; fi
+          gh workflow run watch.yml  # ما بيقفش: الدورة الجاية على طول

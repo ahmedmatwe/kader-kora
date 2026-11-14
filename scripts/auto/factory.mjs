@@ -10,6 +10,7 @@ import { voice, QuotaError } from './voice.mjs';
 import { reviewFrames } from './qa.mjs';
 import { makeTitles } from './titles.mjs';
 import { tell, sendVideo, live } from './notify.mjs';
+import { denialCheck } from './watch.mjs';
 const DRY = process.argv.includes('--dry');
 const FF = fs.existsSync('/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg') ? '/opt/homebrew/opt/ffmpeg-full/bin/' : '';
 const LOGF = path.join(ROOT, 'data/factory.json'); const flog = readJson(LOGF, { runs: [] });
@@ -46,6 +47,9 @@ if (DENIAL) log(`🚨 فيديو نفي/تصحيح لخبر ${DENIAL.corrects}: 
 const story = DENIAL ? DENIAL.story : await pickStory({ recent, log, request: req?.text, idleMin });
 if (req) { req.status = story ? 'done' : 'not-found'; req.at2 = new Date().toISOString(); writeJson(path.join(ROOT, 'data/requests.json'), requests); if (!story) await tell(`🔎 الموضوع اللي طلبته «${req.text}» ما لقيتهوش في جريدتين كبار — مش هعمله عشان المصداقية.`); }
 if (!story) await done('no-story');
+// 🛡️ فريق متابعة النفي قبل ما نبدأ: الحقيقة دي اتصححت/اتنفت رسميًا؟ (درس صلاح 70/68: فيفا كان صحح قبلها بيوم)
+if (!DENIAL) { const dc = await denialCheck(story, Date.now(), log).catch((e) => (log(`⊘ فحص النفي: ${e.message}`), { denied: false }));
+  if (dc.denied) { log(`🚨 فريق النفي وقف القصة: ${dc.summary} (${(dc.papers || []).join('، ')})`); topics.push({ at: new Date().toISOString(), topic: story.topic, id: 'denied' }); writeJson(path.join(ROOT, 'data/topics.json'), topics.slice(-300)); await done('denied-before', { topic: story.topic, why: dc.summary }); } }
 if (!DRY) await tell(`🎬 بدأت في فيديو جديد:\n«${story.topic}»\n📰 ${new Set(story.sources.map((x) => x.paper)).size} جرايد · ${new Date().toLocaleTimeString('ar-EG', { timeZone: 'Africa/Cairo', hour: 'numeric', minute: '2-digit' })}\n\nالفيديو عن إيه:\n${(story.facts || []).slice(0, 3).map((f) => `• ${f.fact || f}`).join('\n')}\n\nهبعتلك الفيديو أول ما يجهز.`);
 
 // فيديو النفي: قواعد كتاب خبرة فريق النفي (DENIAL_PLAYBOOK.md)
