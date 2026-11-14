@@ -4,7 +4,7 @@
 import fs from 'node:fs'; import path from 'node:path'; import { execFileSync } from 'node:child_process';
 import { ROOT, readJson, writeJson, cairoHour } from '../lib.mjs';
 import { pickStory } from './pick.mjs';
-import { hooks, script, reviewScript, scenes, checkScenes, factsText } from './write.mjs';
+import { hooks, script, reviewScript, scenes, checkScenes, fixScenes, factsText } from './write.mjs';
 import { findPhotos } from './photo.mjs';
 import { voice, QuotaError } from './voice.mjs';
 import { reviewFrames } from './qa.mjs';
@@ -83,31 +83,54 @@ for (let a = 0; a < 3; a++) {
 }
 if (errs.length) await done('scenes-failed', { id, errs });
 const papers = [...new Set(story.sources.map((s) => s.paper))];
-writeJson(path.join(dir, 'scenes.json'), { trend: sn.trend, keep: sn.keep || [], sources: `المصادر: ${papers.join(' · ')}`, scenes: sn.scenes });
+const photoList = photos.map((p) => ({ src: p.src, label: p.label, credit: p.credit, focusX: p.focusX, person: p.person }));
+const saveScenes = () => writeJson(path.join(dir, 'scenes.json'), { trend: sn.trend, keep: sn.keep || [], sources: `المصادر: ${papers.join(' · ')}`, scenes: sn.scenes });
+saveScenes();
 
 // 5) الصوت (طلب واحد) + مراجعة الصوت
 log('🎙️ بسجّل الصوت');
 try { await voice(dir, sc.lines, log); } catch (e) { if (e instanceof QuotaError) await done('tts-quota', { id, error: e.message }); throw e; }
 
-// 6) الخطة + الرندر (نسخة واحدة) + نسخة يوتيوب بالموسيقى (ffmpeg، من غير رندر تاني)
-execFileSync('python3', [path.join(ROOT, 'scripts/build_plan.py'), dir], { stdio: 'ignore' });
-fs.copyFileSync(path.join(dir, 'build/voice.wav'), path.join(media, 'voice.wav'));
-const plan = readJson(path.join(dir, 'build/plan.json'));
+// 6) الخطة + الرندر + 7) مراجعة الجودة — ولو فيه مشاكل: فريق الإصلاح يصلّح ونرندر تاني (لحد 3 مرات) بدل ما الفيديو يتلغي
 const social = path.join(dir, 'final', `${id}-social.mp4`); const yt = path.join(dir, 'final', `${id}-youtube.mp4`);
-log('🎞️ بعمل الرندر (موشن + صور)');
-execFileSync('npx', ['remotion', 'render', 'src/index.ts', 'NewsShort', social, `--props=${path.join(dir, 'build/plan.json')}`, '--codec=h264', '--crf=19', '--audio-bitrate=192k', '--log=error', `--concurrency=${process.env.RENDER_CONCURRENCY || '100%'}`], { cwd: path.join(ROOT, 'motion'), stdio: 'inherit' });
+fs.copyFileSync(path.join(dir, 'build/voice.wav'), path.join(media, 'voice.wav'));
+const HARD = /احتشام|محتشم|عري|غير لائق|modest/i;
+let plan; let qa; let fixes = 0;
+for (let round = 0; ; round++) {
+  execFileSync('python3', [path.join(ROOT, 'scripts/build_plan.py'), dir], { stdio: 'ignore' });
+  plan = readJson(path.join(dir, 'build/plan.json'));
+  log(round ? `🎞️ برندر تاني بعد الإصلاح (${round})` : '🎞️ بعمل الرندر (موشن + صور)');
+  execFileSync('npx', ['remotion', 'render', 'src/index.ts', 'NewsShort', social, `--props=${path.join(dir, 'build/plan.json')}`, '--codec=h264', '--crf=19', '--audio-bitrate=192k', '--log=error', `--concurrency=${process.env.RENDER_CONCURRENCY || '100%'}`], { cwd: path.join(ROOT, 'motion'), stdio: 'inherit' });
+  log(`🎞️ اترندر: ${plan.duration}ث`);
+  log('🧐 مراجعة الجودة النهائية');
+  qa = await reviewFrames(social, plan, dir);
+  if (qa.pass) break;
+  const probs = qa.problems || [];
+  log(`⚠️ مراجعة الجودة لقت: ${probs.map((p) => `فريم ${p.frame}: ${p.issue}`).join(' | ')}`);
+  if (round >= 3) {
+    if (probs.some((p) => HARD.test(p.issue))) await done('qa-failed', { id, problems: probs });
+    log('↪️ مشاكل بسيطة فاضلة — الفيديو هيوصلك بملاحظات المراجعة وإنت تقرر'); break;
+  }
+  log('🛠️ فريق الإصلاح شغال');
+  let fixed = null;
+  for (let a = 0; a < 2 && !fixed; a++) {
+    const cand = await fixScenes(story, sc.lines, sn, probs, photoList).catch((e) => (log(`⊘ الإصلاح: ${e.message}`), null));
+    if (!cand) continue;
+    cand.scenes = (cand.scenes || []).filter((s) => s.type !== 'photo' || photos.some((p) => p.src === s.src));
+    for (const s of cand.scenes) if (s.type === 'photo') { const p = photos.find((x) => x.src === s.src); Object.assign(s, { label: p.label, credit: p.credit, focusX: s.focusX ?? p.focusX }); }
+    const e2 = checkScenes(cand, sc.lines); if (e2.length) { log(`⟳ الإصلاح: ${e2.join(' | ')}`); continue; }
+    fixed = cand;
+  }
+  if (!fixed) { if (probs.some((p) => HARD.test(p.issue))) await done('qa-failed', { id, problems: probs }); log('↪️ ما قدرناش نصلّح أكتر — الفيديو هيوصلك بملاحظات المراجعة'); break; }
+  sn = fixed; saveScenes(); fixes++;
+}
 const music = path.join(ROOT, 'assets/music/music.mp3');
 execFileSync(`${FF}ffmpeg`, ['-loglevel', 'error', '-y', '-i', social, '-stream_loop', '-1', '-i', music, '-filter_complex', `[1:a]volume=0.07,afade=t=in:d=0.5,afade=t=out:st=${Math.max(0, plan.duration - 1.2)}:d=1.2[m];[0:a][m]amix=inputs=2:duration=first:normalize=0[a]`, '-map', '0:v', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-shortest', yt]);
 execFileSync(`${FF}ffmpeg`, ['-loglevel', 'error', '-y', '-ss', '1.2', '-i', social, '-frames:v', '1', '-q:v', '2', path.join(dir, 'final', `${id}-cover.jpg`)]);
 const srt = (t) => { const ms = Math.round(t * 1000); const h = String(Math.floor(ms / 3600000)).padStart(2, '0'), m = String(Math.floor(ms / 60000) % 60).padStart(2, '0'), s = String(Math.floor(ms / 1000) % 60).padStart(2, '0'); return `${h}:${m}:${s},${String(ms % 1000).padStart(3, '0')}`; };
 fs.writeFileSync(path.join(dir, 'final', `${id}.ar.srt`), plan.captions.map((c, i) => `${i + 1}\n${srt(c.start)} --> ${srt(c.end)}\n${c.text.replace(/\*/g, '')}\n`).join('\n'));
-log(`🎞️ اترندر: ${plan.duration}ث`);
-
-// 7) مراجعة الفيديو النهائي
-log('🧐 مراجعة الجودة النهائية');
-const qa = await reviewFrames(social, plan, dir);
-if (!qa.pass) { log(`✗ مراجعة الجودة: ${(qa.problems || []).map((p) => `فريم ${p.frame}: ${p.issue}`).join(' | ')}`); await done('qa-failed', { id, problems: qa.problems }); }
-log('✓ مراجعة الجودة عدّت');
+const qaNotes = qa.pass ? [] : (qa.problems || []);
+log(qa.pass ? `✓ مراجعة الجودة عدّت${fixes ? ` بعد ${fixes} إصلاح` : ''}` : '⚠️ مراجعة الجودة: فيه ملاحظات بسيطة');
 
 // 8) فريق العناوين
 const t = await makeTitles({ topic: story.topic, script: sc.lines.map((l) => l.vo).join('\n'), facts: factsText(story) });
@@ -138,10 +161,10 @@ const slot = (p) => { // ما نحطش فيديوهين على نفس المنص
 // كوتة يوتيوب (~6 رفعات في اليوم): الزيادة تتنشر على فيس وإنستا بس
 const ytToday = queued.filter((q) => q.platforms?.youtube && (q.createdAt || '').startsWith(today)).length;
 const plats = cfg.platforms.filter((p) => p !== 'youtube' || ytToday < (cfg.youtubeDaily ?? 6));
-const ticket = { id, release: rel, topic: story.topic, approved: !!cfg.autoApprove, approvedBy: cfg.autoApprove ? cfg.approvedBy : null, createdAt: new Date().toISOString(), qa: { script: rv.issues || [], frames: 'pass' }, platforms: Object.fromEntries(plats.map((p) => [p, { at: slot(p), status: 'pending' }])) };
+const ticket = { id, release: rel, topic: story.topic, approved: !!cfg.autoApprove && !qaNotes.length, approvedBy: cfg.autoApprove && !qaNotes.length ? cfg.approvedBy : null, createdAt: new Date().toISOString(), qa: { script: rv.issues || [], frames: qaNotes.length ? qaNotes : 'pass', fixes }, platforms: Object.fromEntries(plats.map((p) => [p, { at: slot(p), status: 'pending' }])) };
 writeJson(path.join(ROOT, 'queue', `${id}.json`), ticket);
 topics.push({ at: new Date().toISOString(), topic: story.topic, id }); writeJson(path.join(ROOT, 'data/topics.json'), topics.slice(-300));
 for (const p of photos) fs.rmSync(path.join(media, p.file), { force: true });
 log(`📬 في الطابور${ticket.approved ? ' (موافقة دائمة من صاحب القناة)' : ' — مستني موافقتك'}: ${Object.entries(ticket.platforms).map(([p, v]) => `${p} ${v.at}`).join(' · ')}`);
-await sendVideo(social, `✅ فيديو جاهز: ${t.youtube.title}\n${plan.duration} ثانية · مواعيد النشر: ${Object.entries(ticket.platforms).map(([p, v]) => `${p} ${new Date(v.at).toLocaleString('ar-EG', { timeZone: 'Africa/Cairo', hour: 'numeric', minute: '2-digit', weekday: 'short' })}`).join(' · ')}${ticket.approved ? '\n(موافقة دائمة — هيتنشر لوحده)' : '\nتنشره؟'}`, id);
+await sendVideo(social, `✅ فيديو جاهز: ${t.youtube.title}\n${plan.duration} ثانية · مواعيد النشر: ${Object.entries(ticket.platforms).map(([p, v]) => `${p} ${new Date(v.at).toLocaleString('ar-EG', { timeZone: 'Africa/Cairo', hour: 'numeric', minute: '2-digit', weekday: 'short' })}`).join(' · ')}${qaNotes.length ? `\n⚠️ ملاحظات المراجعة:\n${qaNotes.map((p) => `• ${p.issue}`).join('\n')}` : ''}${ticket.approved ? '\n(موافقة دائمة — هيتنشر لوحده)' : '\nتنشره؟'}`, id);
 await done('queued', { id, topic: story.topic });

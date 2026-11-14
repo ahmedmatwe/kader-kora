@@ -76,6 +76,8 @@ export function checkScenes(sc, lines) {
   for (const s of sc.scenes || []) {
     if (!REQ[s.type]) errs.push(`نوع مش معروف ${s.type}`);
     else for (const k of REQ[s.type]) if (s[k] == null || s[k] === '') errs.push(`${s.type} ناقصه ${k}`);
+    if (s.type === 'stat') { const v = Number(String(s.value ?? '').replace(/[^0-9.]/g, '')); if (!Number.isFinite(v) || String(s.value ?? '').replace(/[^0-9.]/g, '') === '') errs.push('stat.value لازم رقم'); else s.value = v; }
+    for (const k of ['title', 'label', 'text', 'sub', 'note', 'detail']) if (typeof s[k] === 'string') s[k] = s[k].replace(/(^|\s)بـ\s*(\d)/g, '$1$2').replace(/(\d)([\u0600-\u06FF])/g, '$1 $2').replace(/([\u0600-\u06FF])(\d)/g, '$1 $2');
     if (!ids.includes(s.from) || !ids.includes(s.to)) errs.push(`${s.type}: from/to مش موجودين`);
     for (const k of ['title', 'label', 'text']) if (typeof s[k] === 'string' && s[k].length > (k === 'text' ? 90 : 34)) errs.push(`${s.type}.${k} طويل`);
   }
@@ -83,4 +85,21 @@ export function checkScenes(sc, lines) {
   for (const id of ids) if (!covered.has(id)) errs.push(`السطر ${id} مالوش مشهد`);
   if (sc.scenes?.at(-1)?.type !== 'end') errs.push('آخر مشهد لازم end');
   return errs;
+}
+
+// فريق الإصلاح: بياخد مشاكل مراجعة الجودة (فريم N = مشهد N) ويصلّح المشاهد بدل ما الفيديو يتلغي.
+export async function fixScenes(story, lines, sn, problems, photos) {
+  const r = await json(`إنت فريق الإصلاح في «كادر كورة». مراجعة الجودة لقت مشاكل في الفيديو. صلّح المشاهد عشان المشاكل دي تختفي، من غير ما تغيّر السيناريو أو الحقايق.\n${SCENES}
+قواعد الإصلاح:
+- فريم رقم N = المشهد رقم N في القايمة.
+- نص طويل/متداخل/مقطوع → قصّره أو قسّمه.
+- رقم ملزوق في كلمة أو «بـ 7» → اكتب الرقم لوحده بمسافات («7 نقاط»)، أو حط الرقم في stat.value كرقم بس والكلمة في suffix.
+- رقم ممكن يتفهم غلط (ترتيب، معكوس) → غيّر نوع المشهد لحاجة أوضح.
+- صورة مش مناسبة أو مش محتشمة → شيل مشهد الصورة وحط مكانه موشن (headline/stat/list).
+- خلي from/to زي ما هم بالظبط، وكل السطور متغطية.
+الحقايق:\n${factsText(story)}\nالسيناريو:\n${JSON.stringify(lines)}\nالصور المتاحة: ${JSON.stringify(photos)}
+المشاهد الحالية:\n${JSON.stringify(sn.scenes)}
+المشاكل:\n${problems.map((p) => `فريم ${p.frame}: ${p.issue}`).join('\n')}
+رجّع JSON {"trend":"","keep":[""],"scenes":[...]}`, { temp: 0.2 });
+  return { trend: r.trend || sn.trend, keep: r.keep || sn.keep, scenes: r.scenes || sn.scenes };
 }

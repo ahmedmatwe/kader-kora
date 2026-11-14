@@ -213,12 +213,13 @@ export const QuoteScene: React.FC<{ who: string; role?: string; text: string; sr
 /** رقم كبير بيعد لحد قيمته + وصفه */
 export const StatScene: React.FC<{ value: number; prefix?: string; suffix?: string; label: string; note?: string; frames: number }> = ({ value, prefix = '', suffix = '', label, note, frames }) => {
   const f = useCurrentFrame(); const p = useIn(0);
-  const n = Math.round(interpolate(f, [4, Math.min(40, frames * 0.5)], [0, value], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: Easing.out(Easing.cubic) }));
+  const v = Number(String(value).replace(/[^0-9.]/g, '')) || 0;
+  const n = Math.round(interpolate(f, [4, Math.min(40, frames * 0.5)], [0, v], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: Easing.out(Easing.cubic) }));
   return (
     <AbsoluteFill>
       <BrandBg />
       <div style={{ position: 'absolute', top: 540, left: SAFE.left, right: SAFE.right, textAlign: 'center', opacity: p, direction: 'rtl' }}>
-        <Num style={{ fontSize: 300, color: C.gold, lineHeight: 1 }}>{`${prefix}${n}${suffix}`}</Num>
+        {prefix && <span style={{ ...ar, fontSize: 90, fontWeight: 900, marginLeft: 20 }}>{prefix}</span>}<Num style={{ fontSize: 300, color: C.gold, lineHeight: 1 }}>{String(n)}</Num>{suffix && <span style={{ ...ar, fontSize: 90, fontWeight: 900, marginRight: 20 }}>{suffix.trim()}</span>}
       </div>
       <div style={{ position: 'absolute', top: 900, left: SAFE.left, right: SAFE.right, textAlign: 'center', ...ar, fontSize: 66, fontWeight: 900, opacity: useIn(10) }}>{label}</div>
       {note && <div style={{ position: 'absolute', top: 1060, left: SAFE.left, right: SAFE.right, textAlign: 'center', ...ar, fontSize: 42, fontWeight: 700, color: C.mute, opacity: useIn(24), whiteSpace: 'pre-line' }}>{note}</div>}
