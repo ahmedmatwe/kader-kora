@@ -5,6 +5,18 @@ import fs from 'node:fs'; import path from 'node:path'; import { execFileSync } 
 import { ROOT, readJson, writeJson, addPost } from './lib.mjs';
 import * as meta from './meta.mjs';
 const qdir = path.join(ROOT, 'queue'); let changed = false;
+// استضافة عامة لفيديو إنستجرام (ريبو ahmedmatwe/kader-kora-media) — محتاج MEDIA_TOKEN؛ من غيره بيرجع للرفع المباشر
+const MEDIA = 'ahmedmatwe/kader-kora-media';
+function hostMedia(id, file) {
+  const url = `https://raw.githubusercontent.com/${MEDIA}/main/${id}.mp4`;
+  const env = { ...process.env, GH_TOKEN: process.env.MEDIA_TOKEN || '' };
+  if (!process.env.MEDIA_TOKEN) { console.log('ℹ️ MEDIA_TOKEN مش موجود — إنستجرام هيترفع مباشر (بيفشل لو > 30 ث)'); return ''; }
+  try { execFileSync('gh', ['api', `repos/${MEDIA}/contents/${id}.mp4`, '--silent'], { env, stdio: 'ignore' }); return url; } catch {} // موجود قبل كده
+  const b64 = fs.readFileSync(file).toString('base64'); const body = path.join(ROOT, `.media-${id}.json`);
+  fs.writeFileSync(body, JSON.stringify({ message: `فيديو ${id}`, content: b64 }));
+  try { execFileSync('gh', ['api', '-X', 'PUT', `repos/${MEDIA}/contents/${id}.mp4`, '--input', body, '--silent'], { env, stdio: 'inherit' }); } finally { fs.rmSync(body, { force: true }); }
+  execFileSync('sleep', ['5']); return url;
+}
 for (const f of fs.existsSync(qdir) ? fs.readdirSync(qdir).filter((x) => x.endsWith('.json')) : []) {
   const p = path.join(qdir, f); const t = readJson(p);
   if (!t.approved || !t.approvedBy) { console.log(`⏸ ${t.id}: مش متوافق عليه — متجاهل`); continue; }
@@ -20,7 +32,7 @@ for (const f of fs.existsSync(qdir) ? fs.readdirSync(qdir).filter((x) => x.endsW
         const pack = readJson(path.join(vdir, 'publish.json'));
         execFileSync('gh', ['release', 'download', t.release, '--pattern', '*social.mp4', '--dir', path.join(vdir, 'final'), '--clobber'], { stdio: 'inherit' });
         const file = path.join(vdir, pack[plat].file);
-        const r = plat === 'facebook' ? await meta.facebookReel(file, pack.facebook.caption) : await meta.instagramReel(file, pack.instagram.caption, 1500);
+        const r = plat === 'facebook' ? await meta.facebookReel(file, pack.facebook.caption) : await meta.instagramReel(file, pack.instagram.caption, 1500, undefined, job.videoUrl || hostMedia(t.id, file));
         Object.assign(job, { status: 'published', id: r.id, url: r.url, doneAt: new Date().toISOString() });
         addPost({ platform: plat, video: t.id, id: r.id, url: r.url, publishAt: new Date().toISOString(), title: pack.youtube.title, status: 'published' });
         console.log(`✓ ${t.id}/${plat}: اتنشر ${r.url}`);

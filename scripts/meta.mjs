@@ -36,12 +36,14 @@ export async function facebookReel(file, description, c = metaCreds()) {
   await graph(c, `${c.pageId}/video_reels`, { upload_phase: 'finish', video_id: st.video_id, video_state: 'PUBLISHED', description });
   return { id: String(st.video_id), url: `https://www.facebook.com/reel/${st.video_id}` };
 }
-export async function instagramReel(file, caption, coverMs = 1500, c = metaCreds()) {
+// إنستجرام: الرفع المباشر بيفشل للحساب الجديد لو الفيديو > ~30 ث، فبنستخدم رابط عام (ريبو kader-kora-media) لو موجود.
+export async function instagramReel(file, caption, coverMs = 1500, c = metaCreds(), videoUrl = '') {
   await guard(c);
   for (let i = 0; ; i++) {
     try {
-      const k = await graph(c, `${c.igId}/media`, { media_type: 'REELS', upload_type: 'resumable', caption, share_to_feed: 'true', thumb_offset: String(coverMs) });
-      await rupload(c, k.uri, file);
+      const base = { media_type: 'REELS', caption, share_to_feed: 'true', thumb_offset: String(coverMs) };
+      const k = await graph(c, `${c.igId}/media`, videoUrl ? { ...base, video_url: videoUrl } : { ...base, upload_type: 'resumable' });
+      if (!videoUrl) await rupload(c, k.uri, file);
       for (let n = 0; n < 60; n++) {
         const s = await graph(c, String(k.id), { fields: 'status_code,status' }, 'GET');
         if (s.status_code === 'FINISHED') break;

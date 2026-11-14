@@ -22,6 +22,7 @@ jobs:
           META_PAGE_TOKEN: ${{ secrets.META_PAGE_TOKEN }}
           META_PAGE_ID: ${{ secrets.META_PAGE_ID }}
           META_IG_USER_ID: ${{ secrets.META_IG_USER_ID }}
+          MEDIA_TOKEN: ${{ secrets.MEDIA_TOKEN }}
         run: node scripts/cloud-publish.mjs
       - name: حفظ حالة الطابور والسجل
         run: |

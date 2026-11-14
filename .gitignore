@@ -8,3 +8,4 @@ videos/*/build/lines/
 research/voice-tests/
 assets/photos/
 .DS_Store
+.media-*.json
