@@ -2,6 +2,7 @@
 import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path';
 export function key() {
   if (process.env.GEMINI_API_KEY) return process.env.GEMINI_API_KEY.split(',')[0].trim();
+  const own = path.join(os.homedir(), '.kader-kora/gemini'); if (fs.existsSync(own)) return fs.readFileSync(own, 'utf8').trim(); // مفتاح كادر كورة الخاص
   const f = path.join(os.homedir(), 'Desktop/youtube-ai-studio/.env');
   const l = fs.existsSync(f) && fs.readFileSync(f, 'utf8').split('\n').find((x) => x.startsWith('GEMINI_API_KEY='));
   if (!l) throw new Error('مفيش GEMINI_API_KEY'); return l.slice(15).trim().replace(/^"|"$/g, '').split(',')[0];
