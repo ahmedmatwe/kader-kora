@@ -97,19 +97,15 @@ if (!qa.pass) { log(`✗ مراجعة الجودة: ${(qa.problems || []).map((p
 log('✓ مراجعة الجودة عدّت');
 
 // 8) فريق العناوين
-const usedPhotos = photos.filter((p) => sn.scenes.some((s) => s.src === p.src));
-const credit = usedPhotos.map((p) => `${p.label}: ${p.credit}`).join('\n');
-const t = await makeTitles({ topic: story.topic, script: sc.lines.map((l) => l.vo).join('\n'), facts: factsText(story), credit });
-const pinned = `${t.pinned || ''}\nالمصادر: ${story.sources.map((s) => s.paper).filter((v, i, a) => a.indexOf(v) === i).join('، ')}${credit ? `\n${credit}` : ''}`.trim();
-writeJson(path.join(dir, 'titles.json'), { ...t, pinned });
+const t = await makeTitles({ topic: story.topic, script: sc.lines.map((l) => l.vo).join('\n'), facts: factsText(story) });
+writeJson(path.join(dir, 'titles.json'), t);
 const f = (x) => `final/${id}-${x}`;
 writeJson(path.join(dir, 'publish.json'), {
   id, approved: false, approvedBy: null,
-  youtube: { file: f('youtube.mp4'), srt: `final/${id}.ar.srt`, title: t.youtube.title, description: `${t.youtube.description}\n\n${pinned}`, tags: ['كادر كورة', 'كورة', ...(story.people || []).map((p) => p.ar)] },
+  youtube: { file: f('youtube.mp4'), srt: `final/${id}.ar.srt`, title: t.youtube.title, description: t.youtube.description, tags: ['كادر كورة', 'كورة', ...(story.people || []).map((p) => p.ar)] },
   facebook: { file: f('social.mp4'), srt: `final/${id}.ar.srt`, caption: t.facebook.caption },
   instagram: { file: f('social.mp4'), caption: t.instagram.caption, cover: f('cover.jpg') },
   tiktok: { file: f('social.mp4'), caption: t.tiktok.caption, cover: f('cover.jpg') },
-  pinned,
 });
 
 // 9) رفع الملفات (ريليس خاص) + تذكرة الطابور بمواعيد فريق المواعيد
