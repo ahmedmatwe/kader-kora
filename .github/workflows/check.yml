@@ -14,4 +14,4 @@ jobs:
           META_PAGE_TOKEN: ${{ secrets.META_PAGE_TOKEN }}
           META_PAGE_ID: ${{ secrets.META_PAGE_ID }}
           META_IG_USER_ID: ${{ secrets.META_IG_USER_ID }}
-        run: node scripts/check-youtube.mjs && node scripts/check-meta.mjs
+        run: node scripts/check-youtube.mjs > /dev/null && node scripts/check-meta.mjs > /dev/null && echo '✓ الربط تمام'

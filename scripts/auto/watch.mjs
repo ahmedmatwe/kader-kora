@@ -2,7 +2,7 @@
 // لو الخبر اتنفى رسميًا: يلغي اللي لسه ما اتنشرش (ومنه ميعاد يوتيوب المجدول) + يطلب فيديو نفي/تصحيح من المصنع على طول.
 // كتاب الخبرة بتاعه: DENIAL_PLAYBOOK.md (بيتقري ويدخل في كل حكم). node scripts/auto/watch.mjs [--dry]
 import fs from 'node:fs'; import path from 'node:path'; import { fileURLToPath } from 'node:url';
-import { ROOT, readJson, writeJson, googleAccess } from '../lib.mjs';
+import { ROOT, DATA_DIR, readJson, writeJson, googleAccess } from '../lib.mjs';
 import { search, article } from './news.mjs';
 import { overlap, verify } from './pick.mjs';
 import { json } from './ai.mjs';
@@ -75,7 +75,7 @@ const MAIN = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(
 const LOOP_MIN = +(process.env.LOOP_MIN || 0); const T0 = Date.now(); let newDenial = false;
 const sh = (c, a) => { try { return execFileSync(c, a, { cwd: ROOT, stdio: 'pipe' }).toString(); } catch (e) { return ''; } };
 async function round() {
-  if (LOOP_MIN) sh('git', ['pull', '-q', '--rebase', '-X', 'theirs']); // التذاكر الجديدة أول ما تتعمل
+  if (LOOP_MIN) { try { execFileSync('git', ['pull', '-q', '--rebase', '-X', 'theirs'], { cwd: DATA_DIR, stdio: 'pipe' }); } catch {} } // التذاكر الجديدة أول ما تتعمل
   Object.assign(W, readJson(WF, { items: {}, runs: [] })); requests.splice(0, requests.length, ...readJson(REQF, []));
   tickets.splice(0, tickets.length, ...fs.readdirSync(qdir).filter((f) => f.endsWith('.json')).map((f) => ({ f, t: readJson(path.join(qdir, f)) })).filter(({ t }) => t.kind !== 'denial' && Date.now() - new Date(t.createdAt) < 72 * 3600e3));
   log(`🛡️ ${new Date().toISOString().slice(11, 16)} بتابع ${tickets.length} خبر`);

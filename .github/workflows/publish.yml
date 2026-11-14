@@ -1,6 +1,5 @@
 name: publish
 on:
-  push: { paths: ['queue/**'] }
   schedule: [{ cron: '7,37 * * * *' }]
   workflow_dispatch:
 concurrency: { group: publish, cancel-in-progress: false }
@@ -11,6 +10,10 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with: { repository: ahmedmatwe/kader-kora-data, token: '${{ secrets.MEDIA_TOKEN }}', path: .data }
+      - name: ربط البيانات الخاصة
+        run: ln -sfn .data/data data && ln -sfn .data/queue queue && ln -sfn .data/videos videos && mkdir -p .data/logs
       - uses: actions/setup-node@v4
         with: { node-version: 24 }
       - name: نشر اللي عليه الدور
@@ -26,10 +29,16 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: node scripts/cloud-publish.mjs
-      - name: حفظ حالة الطابور والسجل
+          DATA_TOKEN: ${{ secrets.MEDIA_TOKEN }}
         run: |
-          git config user.name "kader-kora-bot"; git config user.email "bot@users.noreply.github.com"
-          git add queue data || true
-          git diff --cached --quiet || git commit -qm "نشر: تحديث الطابور"
+          L=.data/logs/publish-${{ github.run_id }}.txt
+          set +e; node scripts/cloud-publish.mjs > "$L" 2>&1; rc=$?; set -e
+          grep -E '^== ' "$L" | tail -1 || true
+          echo "السجل الكامل في الريبو الخاص (logs/publish-${{ github.run_id }}.txt) · exit $rc"; exit $rc
+      - name: حفظ حالة الطابور والسجل
+        if: always()
+        run: |
+          cd .data; git config user.name "kader-kora-bot"; git config user.email "bot@users.noreply.github.com"
+          ls -t logs/* 2>/dev/null | tail -n +120 | xargs rm -f
+          git add -A; git diff --cached --quiet || git commit -qm "نشر: تحديث الطابور"
           for i in 1 2 3 4 5 6; do git pull -q --rebase -X theirs && git push -q && break; sleep $((i*5)); done

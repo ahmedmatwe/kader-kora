@@ -2,7 +2,7 @@
 // التذكرة: { id, approved:true, approvedBy, platforms:{ youtube:{at, status} , ...}, release }
 // يوتيوب: بيترفع أول ما التذكرة تتعمل ومعاه publishAt — يوتيوب نفسه بينشره في الميعاد بالظبط.
 import fs from 'node:fs'; import path from 'node:path'; import { execFileSync } from 'node:child_process';
-import { ROOT, readJson, writeJson, addPost } from './lib.mjs';
+import { ROOT, readJson, writeJson, addPost, DATA_REPO, dataEnv } from './lib.mjs';
 import * as meta from './meta.mjs';
 import { alreadyOut, persist, sameNews } from './guard.mjs';
 import { tell as tellOwner } from './auto/notify.mjs';
@@ -51,7 +51,7 @@ for (const f of fs.existsSync(qdir) ? fs.readdirSync(qdir).filter((x) => x.endsW
     if (plat !== 'youtube') {
       try {
         const pack = readJson(path.join(vdir, 'publish.json'));
-        execFileSync('gh', ['release', 'download', t.release, '--pattern', '*social.mp4', '--dir', path.join(vdir, 'final'), '--clobber'], { stdio: 'inherit' });
+        execFileSync('gh', ['release', 'download', '-R', DATA_REPO, t.release, '--pattern', '*social.mp4', '--dir', path.join(vdir, 'final'), '--clobber'], { stdio: 'inherit', env: dataEnv() });
         const file = path.join(vdir, pack[plat].file);
         const r = plat === 'facebook' ? await meta.facebookReel(file, pack.facebook.caption) : await meta.instagramReel(file, pack.instagram.caption, 1500, undefined, job.videoUrl || hostMedia(t.id, file));
         Object.assign(job, { status: 'published', id: r.id, url: r.url, doneAt: new Date().toISOString() });
@@ -62,7 +62,7 @@ for (const f of fs.existsSync(qdir) ? fs.readdirSync(qdir).filter((x) => x.endsW
     }
     try {
       // نزّل ملفات الفيديو من الريليس الخاص
-      execFileSync('gh', ['release', 'download', t.release, '--dir', path.join(vdir, 'final'), '--clobber'], { stdio: 'inherit' });
+      execFileSync('gh', ['release', 'download', '-R', DATA_REPO, t.release, '--dir', path.join(vdir, 'final'), '--clobber'], { stdio: 'inherit', env: dataEnv() });
       const out = execFileSync('node', [path.join(ROOT, 'scripts/publish-youtube.mjs'), `videos/${t.id}`, ...(job.at ? ['--at', job.at] : [])], { encoding: 'utf8' });
       console.log(out); const url = out.match(/https:\/\/youtube\.com\/shorts\/\S+/)?.[0];
       Object.assign(job, { status: url ? 'scheduled' : 'check', url, doneAt: new Date().toISOString() });

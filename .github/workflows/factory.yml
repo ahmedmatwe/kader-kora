@@ -11,6 +11,10 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with: { repository: ahmedmatwe/kader-kora-data, token: '${{ secrets.MEDIA_TOKEN }}', path: .data }
+      - name: ربط البيانات الخاصة
+        run: ln -sfn .data/data data && ln -sfn .data/queue queue && ln -sfn .data/videos videos && mkdir -p .data/logs
       - uses: actions/setup-node@v4
         with: { node-version: 24, cache: npm, cache-dependency-path: motion/package.json }
       - uses: actions/setup-python@v5
@@ -33,13 +37,18 @@ jobs:
           BOT_URL: ${{ secrets.BOT_URL }}
           BOT_INGEST_SECRET: ${{ secrets.BOT_INGEST_SECRET }}
           WHISPER_MODEL: large-v3-turbo
-        run: node scripts/auto/factory.mjs
+          DATA_TOKEN: ${{ secrets.MEDIA_TOKEN }}
+        run: |
+          L=.data/logs/factory-${{ github.run_id }}.txt
+          set +e; node scripts/auto/factory.mjs > "$L" 2>&1; rc=$?; set -e
+          grep -E '^== ' "$L" | tail -1 || true
+          echo "السجل الكامل في الريبو الخاص (logs/factory-${{ github.run_id }}.txt) · exit $rc"; exit $rc
       - name: حفظ (الطابور + السجل + ملفات الفيديو النصية)
         if: always()
         run: |
-          git config user.name "kader-kora-bot"; git config user.email "bot@users.noreply.github.com"
-          git add queue data videos || true
-          git diff --cached --quiet || git commit -qm "المصنع: دورة إنتاج"
+          cd .data; git config user.name "kader-kora-bot"; git config user.email "bot@users.noreply.github.com"
+          ls -t logs/* 2>/dev/null | tail -n +120 | xargs rm -f
+          git add -A; git diff --cached --quiet || git commit -qm "المصنع: دورة إنتاج"
           for i in 1 2 3 4 5 6; do git pull -q --rebase -X theirs && git push -q && break; sleep $((i*5)); done
       - name: نشر مباشر (لو اتعمل فيديو)
         if: always()
@@ -47,10 +56,6 @@ jobs:
         run: |
           S=$(node -e "const f=require('fs').existsSync('data/factory.json')?require('./data/factory.json'):{runs:[]};console.log((f.runs.at(-1)||{}).status||'')")
           if [ "$S" = queued ]; then gh workflow run publish.yml; fi
-      - name: معاينة (3 أيام)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with: { name: preview, path: 'videos/*/final/*-social.mp4', if-no-files-found: ignore, retention-days: 3 }
       - name: الدورة الجاية على طول (ما بنقفش غير عند الحد اليومي)
         if: always()
         env: { GH_TOKEN: '${{ github.token }}' }

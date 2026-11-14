@@ -2,6 +2,10 @@
 import fs from 'node:fs'; import path from 'node:path'; import os from 'node:os'; import { fileURLToPath } from 'node:url';
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const SECRETS = path.join(os.homedir(), '.kader-kora');
+// البيانات الخاصة (طابور/سجلات/إحصائيات/فيديوهات) في ريبو خاص، متركّب في .data و data/queue/videos روابط ليه
+export const DATA_REPO = 'ahmedmatwe/kader-kora-data';
+export const DATA_DIR = path.join(ROOT, '.data');
+export const dataEnv = () => ({ ...process.env, GH_TOKEN: process.env.DATA_TOKEN || process.env.GH_TOKEN || '' });
 export const TZ = 'Africa/Cairo';
 
 export function readJson(p, def) { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return def; } }

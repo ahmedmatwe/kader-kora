@@ -2,7 +2,7 @@
 // بيشتغل على GitHub Actions كل ساعة ونص (من غير الماك). كل مرحلة ليها مراجعة، وأي فشل بيوقف الفيديو ده بس.
 // node scripts/auto/factory.mjs [--dry]   (--dry: لحد السيناريو بس من غير صوت/رندر)
 import fs from 'node:fs'; import path from 'node:path'; import { execFileSync } from 'node:child_process';
-import { ROOT, readJson, writeJson, cairoHour } from '../lib.mjs';
+import { ROOT, readJson, writeJson, cairoHour, DATA_REPO, dataEnv } from '../lib.mjs';
 import { pickStory } from './pick.mjs';
 import { hooks, script, reviewScript, scenes, checkScenes, fixScenes, photoMismatches, mixPhotos, ensureCards, factsText } from './write.mjs';
 import { findPhotos, findContext, findClips } from './photo.mjs';
@@ -170,7 +170,7 @@ writeJson(path.join(dir, 'publish.json'), {
 
 // 9) رفع الملفات (ريليس خاص) + تذكرة الطابور بمواعيد فريق المواعيد
 const rel = `v-${id}`;
-execFileSync('gh', ['release', 'create', rel, social, yt, path.join(dir, 'final', `${id}-cover.jpg`), path.join(dir, 'final', `${id}.ar.srt`), '--title', id, '--notes', story.topic], { cwd: ROOT, stdio: 'inherit' });
+execFileSync('gh', ['release', 'create', '-R', DATA_REPO, rel, social, yt, path.join(dir, 'final', `${id}-cover.jpg`), path.join(dir, 'final', `${id}.ar.srt`), '--title', id, '--notes', story.topic], { cwd: ROOT, stdio: 'inherit', env: dataEnv() });
 const sched = JSON.parse(execFileSync('node', [path.join(ROOT, 'scripts/schedule.mjs'), '--type', story.type || 'news'], { encoding: 'utf8' }).trim().split('\n').pop());
 const queued = fs.readdirSync(path.join(ROOT, 'queue')).filter((x) => x.endsWith('.json')).map((x) => readJson(path.join(ROOT, 'queue', x)));
 const slot = (p) => { // نشر مباشر (cfg.publishNow): دلوقتي على طول — بس مش فيديوهين على نفس المنصة في أقل من 20 دقيقة

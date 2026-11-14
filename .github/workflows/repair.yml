@@ -20,6 +20,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
+      - uses: actions/checkout@v4
+        with: { repository: ahmedmatwe/kader-kora-data, token: '${{ secrets.MEDIA_TOKEN }}', path: .data }
+      - name: ربط البيانات الخاصة
+        run: ln -sfn .data/data data && ln -sfn .data/queue queue && ln -sfn .data/videos videos && mkdir -p .data/logs
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
       - uses: actions/setup-python@v5
@@ -29,15 +33,19 @@ jobs:
       - name: سجل الدورة اللي وقعت
         run: |
           [ -n "$RUN_SHA" ] || echo "RUN_SHA=$(gh run view "$RUN_ID" --json headSha -q .headSha)" >> $GITHUB_ENV
-          gh run view "$RUN_ID" --log-failed > /tmp/failed.log 2>/dev/null || gh run view "$RUN_ID" --log | tail -400 > /tmp/failed.log || true
+          # السجل الكامل بقى في الريبو الخاص (العام بيبان فيه سطر الحالة بس)
+          F=$(ls .data/logs/*-"$RUN_ID".txt 2>/dev/null | head -1)
+          if [ -n "$F" ]; then tail -400 "$F" > /tmp/failed.log; else gh run view "$RUN_ID" --log-failed > /tmp/failed.log 2>/dev/null || true; fi
       - name: فريق الإصلاح
-        run: node scripts/auto/repair.mjs /tmp/failed.log "$WF"
+        run: node scripts/auto/repair.mjs /tmp/failed.log "$WF" > .data/logs/repair-${{ github.run_id }}.txt 2>&1
       - name: رفع الإصلاح + تشغيل المصنع تاني
         run: |
           S=$(node -e "console.log(require('/tmp/repair.json').status)")
           git config user.name "kader-repair"; git config user.email "repair@users.noreply.github.com"
-          git add data/repairs.json $(node -e "console.log((require('/tmp/repair.json').files||[]).join(' '))")
-          git diff --cached --quiet || (git commit -qm "فريق الإصلاح: $(node -e "console.log(require('/tmp/repair.json').message.split('\n')[0].slice(0,80))")" && git pull -q --rebase && git push -q)
+          FILES=$(node -e "console.log((require('/tmp/repair.json').files||[]).filter(f=>!/^(data|queue|videos)\//.test(f)).join(' '))")
+          [ -n "$FILES" ] && git add $FILES
+          git diff --cached --quiet || (git commit -qm "فريق الإصلاح: تعديل كود" && git pull -q --rebase && git push -q)
+          (cd .data && git config user.name "kader-repair" && git config user.email "repair@users.noreply.github.com" && git add -A && (git diff --cached --quiet || git commit -qm "فريق الإصلاح") && for i in 1 2 3 4; do git pull -q --rebase -X theirs && git push -q && break; sleep 5; done)
           if [ "$S" = fixed ] && [ "$WF" = factory ]; then gh workflow run factory.yml; fi
       - name: بلّغ صاحب القناة
         if: always()

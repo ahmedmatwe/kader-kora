@@ -10,3 +10,9 @@ assets/photos/
 .DS_Store
 .media-*.json
 bot/.wrangler/
+
+# البيانات الخاصة في الريبو الخاص ahmedmatwe/kader-kora-data (متركّب في .data)
+/.data/
+/data
+/queue
+/videos

@@ -2,6 +2,7 @@
 // بيسمع من صاحب القناة بس (CHAT_ID). أي حاجة بتحذف أو بتنشر أو بتغيّر إعداد مهم بتستنى زرار تأكيد.
 // شغال على Cloudflare (من غير الماك). المفاتيح كلها secrets في Cloudflare.
 const REPO = 'ahmedmatwe/kader-kora';
+const DATA = 'ahmedmatwe/kader-kora-data'; // الطابور والسجلات والإحصائيات (ريبو خاص)
 const GH = 'https://api.github.com';
 const TZ = 'Africa/Cairo';
 const cairo = (iso) => new Date(iso).toLocaleString('ar-EG', { timeZone: TZ, weekday: 'short', hour: 'numeric', minute: '2-digit', day: 'numeric', month: 'short' });
@@ -18,7 +19,7 @@ const ghH = (env) => ({ authorization: `Bearer ${env.GH_TOKEN}`, 'user-agent': '
 const b64d = (s) => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\n/g, '')), (c) => c.charCodeAt(0)));
 const b64e = (s) => btoa(String.fromCharCode(...new TextEncoder().encode(s)));
 async function getFile(env, p) {
-  const r = await fetch(`${GH}/repos/${REPO}/contents/${encodeURI(p)}`, { headers: ghH(env) });
+  const r = await fetch(`${GH}/repos/${DATA}/contents/${encodeURI(p)}`, { headers: ghH(env) });
   if (r.status === 404) return { text: null, sha: null };
   const j = await r.json(); return { text: b64d(j.content || ''), sha: j.sha };
 }
@@ -26,12 +27,12 @@ async function getJson(env, p, d) { const f = await getFile(env, p); try { retur
 async function putJson(env, p, mutate, msg, d = {}) {
   for (let i = 0; i < 4; i++) {
     const { data, sha } = await getJson(env, p, d); const next = await mutate(data);
-    const r = await fetch(`${GH}/repos/${REPO}/contents/${encodeURI(p)}`, { method: 'PUT', headers: ghH(env), body: JSON.stringify({ message: `🤖 ${msg}`, content: b64e(JSON.stringify(next, null, 1) + '\n'), ...(sha ? { sha } : {}) }) });
+    const r = await fetch(`${GH}/repos/${DATA}/contents/${encodeURI(p)}`, { method: 'PUT', headers: ghH(env), body: JSON.stringify({ message: `🤖 ${msg}`, content: b64e(JSON.stringify(next, null, 1) + '\n'), ...(sha ? { sha } : {}) }) });
     if (r.ok) return next; if (r.status !== 409 && r.status !== 422) throw new Error(`GitHub ${r.status}`);
   }
   throw new Error('GitHub: تعارض، جرب تاني');
 }
-async function listDir(env, p) { const r = await fetch(`${GH}/repos/${REPO}/contents/${encodeURI(p)}`, { headers: ghH(env) }); return r.ok ? r.json() : []; }
+async function listDir(env, p) { const r = await fetch(`${GH}/repos/${DATA}/contents/${encodeURI(p)}`, { headers: ghH(env) }); return r.ok ? r.json() : []; }
 async function tickets(env) {
   const files = (await listDir(env, 'queue')).filter((f) => f.name.endsWith('.json'));
   return Promise.all(files.map(async (f) => ({ ...(await getJson(env, f.path, {})).data, _path: f.path })));
@@ -93,7 +94,7 @@ const TOOLS = {
   async run_factory(env) { return { ok: await dispatch(env, 'factory.yml') }; },
   async read_file(env, { path }) { const f = await getFile(env, path); return f.text == null ? { error: 'مش موجود' } : { text: f.text.slice(0, 6000) }; },
   // ↓ دول بيستنوا تأكيد بزرار
-  async approve(env, { id }) { await editTicket(env, id, (t) => ({ ...t, approved: true, approvedBy: `صاحب القناة على تليجرام ${new Date().toISOString()}` }), `موافقة على ${id}`); return { ok: true }; },
+  async approve(env, { id }) { await editTicket(env, id, (t) => ({ ...t, approved: true, approvedBy: `صاحب القناة على تليجرام ${new Date().toISOString()}` }), `موافقة على ${id}`); await dispatch(env, 'publish.yml'); return { ok: true }; }, // الطابور في الريبو الخاص فمفيش push يشغّل النشر — بنشغّله إحنا
   async cancel(env, { id }) { await editTicket(env, id, (t) => ({ ...t, approved: false, approvedBy: null, cancelled: new Date().toISOString(), platforms: Object.fromEntries(Object.entries(t.platforms).map(([p, j]) => [p, ['published', 'scheduled'].includes(j.status) ? j : { ...j, status: 'cancelled' }])) }), `إلغاء ${id}`); return { ok: true }; },
   async reschedule(env, { id, platform, at }) { await editTicket(env, id, (t) => { t.platforms[platform] = { ...t.platforms[platform], at: new Date(at).toISOString(), status: 'pending' }; return t; }, `ميعاد جديد ${id}/${platform}`); return { ok: true }; },
   async delete_video(env, { id, platforms }) {

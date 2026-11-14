@@ -3,7 +3,7 @@
 // 2) بيحجز النشر (status=publishing) ويرفعه للريبو قبل ما ينشر. لو الحجز ما اترفعش → ما بينشرش.
 // 3) بعد النشر بيرفع النتيجة بإعادة محاولات. ولو الرفع وقع، الدورة الجاية بتلاقي «publishing» فتتأكد من المنصة بدل ما تنشر تاني.
 import { execFileSync } from 'node:child_process';
-import { ROOT, googleAccess } from './lib.mjs';
+import { DATA_DIR, googleAccess } from './lib.mjs';
 import { metaCreds } from './meta.mjs';
 import { overlap } from './auto/pick.mjs';
 import { json } from './auto/ai.mjs';
@@ -38,8 +38,8 @@ export async function alreadyOut(plat, pack) {
 }
 /** رفع حالة الطابور للريبو بإعادة محاولات (pull --rebase). بيرجّع true لو اترفع */
 export function persist(msg) {
-  const git = (...a) => execFileSync('git', ['-c', 'user.name=kader-guard', '-c', 'user.email=guard@users.noreply.github.com', ...a], { cwd: ROOT, stdio: 'pipe' });
-  try { git('add', 'queue', 'data'); git('diff', '--cached', '--quiet'); return true; } catch {} // مفيش تغيير = تمام
+  const git = (...a) => execFileSync('git', ['-c', 'user.name=kader-guard', '-c', 'user.email=guard@users.noreply.github.com', ...a], { cwd: DATA_DIR, stdio: 'pipe' }); // الحالة بتترفع للريبو الخاص
+  try { git('add', '-A'); git('diff', '--cached', '--quiet'); return true; } catch {} // مفيش تغيير = تمام
   try { git('commit', '-qm', msg); } catch { return false; }
   for (let i = 0; i < 6; i++) {
     try { git('pull', '-q', '--rebase', '-X', 'theirs'); git('push', '-q'); return true; } catch { execFileSync('sleep', [String(3 + i * 4)]); }
