@@ -34,7 +34,8 @@ for (const { f, t } of tickets) {
   if (st.state === 'denied' && st.requested) continue;
   const story = readJson(path.join(ROOT, 'videos', t.id, 'story.json'), null);
   if (!story?.facts) { log(`⊘ ${t.id}: مفيش story.json`); continue; }
-  const since = new Date(t.createdAt).getTime() - 12 * 3600e3;
+  const srcAt = (story.sources || []).map((x) => Date.parse(x.date)).filter(Boolean); // من أول ما الخبر الأصلي اتنشر (مش من ميعاد فيديونا)
+  const since = (srcAt.length ? Math.min(...srcAt) : new Date(t.createdAt).getTime() - 24 * 3600e3) - 3600e3;
   const names = (story.people || []).map((p) => p.ar).filter(Boolean).slice(0, 3);
   const short = story.topic.split(/\s+/).slice(0, 6).join(' ');
   const qs = [`${short} نفي`, `حقيقة ${short}`, ...names.map((n) => `${n} ينفي`), ...names.map((n) => `${n} حقيقة`)];
@@ -56,10 +57,10 @@ for (const { f, t } of tickets) {
 —— الشغل دلوقتي ——
 الخبر اللي إحنا نشرناه/هننشره («${story.topic}») اتبنى على الحقايق دي:
 ${facts}
-وده اتعمل ${t.createdAt}. ده اللي ظهر بعده في الجرايد الكبيرة:
+مصادرنا الأصلية اتنشرت: ${(story.sources || []).map((x) => `${x.paper} ${x.date || '?'}`).join('، ')}. فيديونا اتعمل ${t.createdAt}. ده اللي ظهر في الجرايد الكبيرة من بعد الخبر الأصلي:
 ${arts.map((a, i) => `### [${i}] ${a.paper} — ${a.title} (${a.at ? new Date(a.at).toISOString() : 'تاريخ مش واضح'})\n${a.snippet}\n${a.text}`).join('\n\n')}
 
-احكم حسب كتاب الخبرة. رجّع JSON {"denied":true|false,"level":"official|correction|none","facts":["F1"],"denier":"مين نفى (الجهة/الشخص)","papers":["الجرايد اللي نشرت النفي"],"ids":[أرقام المقالات اللي فيها النفي],"summary":"النفي في سطر بالعامية","why":"ليه حكمت كده"}`, { temp: 0.1 });
+احكم حسب كتاب الخبرة. رجّع JSON {"denied":true|false,"level":"official|correction|none","facts":["F1"],"denier":"مين نفى (الجهة/الشخص)","papers":["الجرايد اللي نشرت النفي"],"ids":[أرقام المقالات اللي فيها النفي],"summary":"النفي في سطر بالعامية","why":"ليه حكمت كده"}`, { temp: 0 });
   const ok = j.denied && ['official', 'correction'].includes(j.level) && (j.facts || []).length;
   if (!ok) { log(`✓ ${t.id}: فيه كلام بس مش نفي لخبرنا (${(j.why || '').slice(0, 120)})`); st.lastNote = j.why; changed.add(WF); continue; }
   const papers = [...new Set((j.ids || []).map((i) => arts[i]?.paper).filter(Boolean))];
