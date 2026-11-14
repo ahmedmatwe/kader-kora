@@ -2,7 +2,8 @@
 // التذكرة: { id, approved:true, approvedBy, platforms:{ youtube:{at, status} , ...}, release }
 // يوتيوب: بيترفع أول ما التذكرة تتعمل ومعاه publishAt — يوتيوب نفسه بينشره في الميعاد بالظبط.
 import fs from 'node:fs'; import path from 'node:path'; import { execFileSync } from 'node:child_process';
-import { ROOT, readJson, writeJson } from './lib.mjs';
+import { ROOT, readJson, writeJson, addPost } from './lib.mjs';
+import * as meta from './meta.mjs';
 const qdir = path.join(ROOT, 'queue'); let changed = false;
 for (const f of fs.existsSync(qdir) ? fs.readdirSync(qdir).filter((x) => x.endsWith('.json')) : []) {
   const p = path.join(qdir, f); const t = readJson(p);
@@ -10,7 +11,22 @@ for (const f of fs.existsSync(qdir) ? fs.readdirSync(qdir).filter((x) => x.endsW
   const vdir = path.join(ROOT, 'videos', t.id); fs.mkdirSync(path.join(vdir, 'final'), { recursive: true });
   for (const [plat, job] of Object.entries(t.platforms)) {
     if (job.status && job.status !== 'pending' && job.status !== 'retry') continue;
-    if (plat !== 'youtube') { console.log(`… ${t.id}/${plat}: المنصة لسه مش متربطة على السحابة`); continue; }
+    const connected = plat === 'youtube' || ((plat === 'facebook' || plat === 'instagram') && process.env.META_PAGE_TOKEN);
+    if (!connected) { console.log(`… ${t.id}/${plat}: المنصة لسه مش متربطة على السحابة`); continue; }
+    // فيس وإنستا مالهمش جدولة في الـAPI بتاعنا → بننشر لما الميعاد ييجي (المهمة بتصحى كل نص ساعة)
+    if (plat !== 'youtube' && job.at && new Date(job.at) > new Date()) { console.log(`⏳ ${t.id}/${plat}: ميعاده ${job.at}`); continue; }
+    if (plat !== 'youtube') {
+      try {
+        const pack = readJson(path.join(vdir, 'publish.json'));
+        execFileSync('gh', ['release', 'download', t.release, '--pattern', '*social.mp4', '--dir', path.join(vdir, 'final'), '--clobber'], { stdio: 'inherit' });
+        const file = path.join(vdir, pack[plat].file);
+        const r = plat === 'facebook' ? await meta.facebookReel(file, pack.facebook.caption) : await meta.instagramReel(file, pack.instagram.caption, 1500);
+        Object.assign(job, { status: 'published', id: r.id, url: r.url, doneAt: new Date().toISOString() });
+        addPost({ platform: plat, video: t.id, id: r.id, url: r.url, publishAt: new Date().toISOString(), title: pack.youtube.title, status: 'published' });
+        console.log(`✓ ${t.id}/${plat}: اتنشر ${r.url}`);
+      } catch (e) { job.tries = (job.tries || 0) + 1; job.status = job.tries >= 3 ? 'failed' : 'retry'; job.error = String(e.message).slice(-400); console.error(`✗ ${t.id}/${plat}:`, job.error); }
+      changed = true; continue;
+    }
     try {
       // نزّل ملفات الفيديو من الريليس الخاص
       execFileSync('gh', ['release', 'download', t.release, '--dir', path.join(vdir, 'final'), '--clobber'], { stdio: 'inherit' });
