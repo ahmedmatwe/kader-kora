@@ -45,7 +45,7 @@ const denied = readJson(path.join(ROOT, 'data/watch.json'), { items: {} }); // �
 for (const [vid, w] of Object.entries(denied.items || {})) if (w.state === 'denied') { const tp = topics.find((x) => x.id === vid); if (tp) recent.push(tp.topic, w.summary || ''); }
 if (DENIAL) log(`🚨 فيديو نفي/تصحيح لخبر ${DENIAL.corrects}: ${DENIAL.story.denial.summary}`);
 const story = DENIAL ? DENIAL.story : await pickStory({ recent, log, request: req?.text, idleMin });
-if (req) { req.status = story ? 'done' : 'not-found'; req.at2 = new Date().toISOString(); writeJson(path.join(ROOT, 'data/requests.json'), requests); if (!story) await tell(`🔎 الموضوع اللي طلبته «${req.text}» ما لقيتهوش في جريدتين كبار — مش هعمله عشان المصداقية.`); }
+if (req && !DENIAL) { req.status = story ? 'done' : 'not-found'; req.at2 = new Date().toISOString(); writeJson(path.join(ROOT, 'data/requests.json'), requests); if (!story) await tell(`🔎 الموضوع اللي طلبته «${req.text}» ما لقيتهوش في جريدتين كبار — مش هعمله عشان المصداقية.`); }
 if (!story) await done('no-story');
 // 🛡️ فريق متابعة النفي قبل ما نبدأ: الحقيقة دي اتصححت/اتنفت رسميًا؟ (درس صلاح 70/68: فيفا كان صحح قبلها بيوم)
 if (!DENIAL) { const dc = await denialCheck(story, Date.now(), log).catch((e) => (log(`⊘ فحص النفي: ${e.message}`), { denied: false }));
@@ -192,4 +192,5 @@ topics.push({ at: new Date().toISOString(), topic: story.topic, id }); writeJson
 for (const p of [...photos, ...ctxPhotos]) fs.rmSync(path.join(media, p.file), { force: true });
 log(`📬 في الطابور${ticket.approved ? ' (موافقة دائمة من صاحب القناة)' : ' — مستني موافقتك'}: ${Object.entries(ticket.platforms).map(([p, v]) => `${p} ${v.at}`).join(' · ')}`);
 await sendVideo(social, `✅ فيديو جاهز: ${t.youtube.title}\n${plan.duration} ثانية · مواعيد النشر: ${Object.entries(ticket.platforms).map(([p, v]) => `${p} ${new Date(v.at).toLocaleString('ar-EG', { timeZone: 'Africa/Cairo', hour: 'numeric', minute: '2-digit', weekday: 'short' })}`).join(' · ')}${qaNotes.length ? `\n⚠️ ملاحظات المراجعة:\n${qaNotes.map((p) => `• ${p.issue}`).join('\n')}` : ''}${ticket.approved ? '\n(موافقة دائمة — هيتنشر لوحده)' : '\nتنشره؟'}`, id);
+if (DENIAL) { DENIAL.status = 'done'; DENIAL.video = id; DENIAL.at2 = new Date().toISOString(); writeJson(path.join(ROOT, 'data/requests.json'), requests); } // طلب النفي بيتقفل بس لما الفيديو يدخل الطابور
 await done('queued', { id, topic: story.topic });

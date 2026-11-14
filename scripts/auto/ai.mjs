@@ -15,12 +15,13 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function call(models, parts, gen) {
   let last = '';
-  for (let pass = 0; pass < 2; pass++) for (const m of models) for (const k of keys()) {
+  for (let pass = 0; pass < 4; pass++) { if (pass && /429/.test(last)) await sleep(45000); // حد الدقيقة: نستنى ونرجع بدل ما الفيديو يقع
+  for (const m of models) for (const k of keys()) {
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': k }, body: JSON.stringify({ contents: [{ parts }], generationConfig: gen }), signal: AbortSignal.timeout(90000) }).catch((e) => ({ ok: false, status: 0, json: async () => ({ error: { message: e.message } }) }));
     const j = await r.json().catch(() => ({}));
     const p = j.candidates?.[0]?.content?.parts; if (r.ok && p) return p;
     last = `${m} ${r.status} ${(j.error?.message || '').slice(0, 120)}`; await sleep(r.status === 429 ? 1500 : 2000);
-  }
+  } }
   throw new Error(`Gemini فشل: ${last}`);
 }
 /** JSON مضمون (بيعيد لو الرد مش JSON) */

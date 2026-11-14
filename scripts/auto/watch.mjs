@@ -64,7 +64,7 @@ ${facts}
 مصادرنا الأصلية اتنشرت: ${(story.sources || []).map((x) => `${x.paper} ${x.date || '?'}`).join('، ')}. فيديونا اتعمل ${new Date(refAt).toISOString()}. ده اللي في الجرايد الكبيرة آخر 3 أيام:
 ${arts.map((a, i) => `### [${i}] ${a.paper} — ${a.title} (${a.at ? new Date(a.at).toISOString() : 'تاريخ مش واضح'})\n${a.snippet}\n${a.text}`).join('\n\n')}
 
-احكم حسب كتاب الخبرة. ids = **كل** المقالات اللي فيها نفس النفي/التصحيح (من كل الجرايد). رجّع JSON {"denied":true|false,"level":"official|correction|none","facts":["F1"],"denier":"مين نفى (الجهة/الشخص)","ids":[أرقام المقالات],"summary":"النفي في سطر بالعامية","why":"ليه حكمت كده"}`, { temp: 0 });
+احكم حسب كتاب الخبرة. ids = **كل** المقالات اللي فيها نفس النفي/التصحيح (من كل الجرايد). رجّع JSON {"denied":true|false,"level":"official|correction|none","facts":["F1"],"denier":"مين نفى (الجهة/الشخص)","ids":[أرقام المقالات],"summary":"النفي في سطر بالعامية","why":"ليه حكمت كده"}`, { temp: 0, light: true }); // موديلات خفيفة = كوتة منفصلة عن المصنع
   const ok = !!(j.denied && ['official', 'correction'].includes(j.level) && (j.facts || []).length);
   const src = [...new Map((j.ids || []).map((i) => arts[i]).filter(Boolean).map((a) => [a.paper, a])).values()];
   return { denied: ok, ...j, arts, src, papers: src.map((a) => a.paper) };
