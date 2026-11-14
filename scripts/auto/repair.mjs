@@ -34,7 +34,7 @@ const base = [...new Set([...mentioned, ...(wf === 'factory' ? ['scripts/auto/fa
 // + الملفات اللي بيستورد منها (عشان يعرف أسماء الدوال وشكلها الحقيقي)
 const imports = base.flatMap((f) => [...fs.readFileSync(path.join(ROOT, f), 'utf8').matchAll(/from '(\.{1,2}\/[^']+)'/g)].map((m) => path.relative(ROOT, path.resolve(path.dirname(path.join(ROOT, f)), m[1])))).filter((f) => ALLOWED.test(f) && fs.existsSync(path.join(ROOT, f)));
 const files = [...new Set([...base, ...imports])].slice(0, 7);
-const playbook = fs.readFileSync(path.join(ROOT, 'REPAIR_PLAYBOOK.md'), 'utf8');
+const playbook = fs.readFileSync(path.join(ROOT, 'REPAIR_PLAYBOOK.md'), 'utf8') + (/photo|صور/i.test(log) ? '\n\n' + fs.readFileSync(path.join(ROOT, 'PHOTO_PLAYBOOK.md'), 'utf8') : '');
 // الدورة اتعملت على نسخة قديمة؟ نوري الفريق اللي اتغير بعدها (ممكن الغلطة تكون اتصلّحت خلاص)
 const runSha = process.env.RUN_SHA || '';
 let since = '';

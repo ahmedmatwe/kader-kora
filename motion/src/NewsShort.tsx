@@ -1,7 +1,7 @@
 // تركيب الفيديو: مشاهد من المكتبة حسب plan.json + صوت + ترجمة + الهوية
 import React from 'react';
 import { AbsoluteFill, Audio, Sequence, staticFile, useVideoConfig, interpolate, useCurrentFrame } from 'remotion';
-import { FontFace, FPS } from './templates/brand';
+import { FontFace, FPS, BgPhoto } from './templates/brand';
 import { TrendBar, Watermark, Captions, SourceStrip, type Caption } from './templates/parts';
 import * as S from './templates/scenes';
 
@@ -31,7 +31,7 @@ export const NewsShort: React.FC<Plan> = (plan) => {
         const frames = Math.max(1, Math.round(sc.end * fps) - from);
         return (
           <Sequence key={i} from={from} durationInFrames={frames}>
-            <Fade frames={frames}><Comp {...sc} frames={frames} /></Fade>
+            <BgPhoto.Provider value={sc.type !== 'photo' && typeof sc.bg === 'string' ? { src: sc.bg as string, focusX: sc.bgFocusX as number | undefined } : null}><Fade frames={frames}><Comp {...sc} frames={frames} /></Fade></BgPhoto.Provider>
           </Sequence>
         );
       })}

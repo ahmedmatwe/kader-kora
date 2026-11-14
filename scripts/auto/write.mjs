@@ -49,6 +49,7 @@ export async function reviewScript(story, sc) {
 }
 
 const SCENES = `مكتبة المشاهد (type: props) — كل مشهد بيغطي سطر واحد (from=to=id السطر):
+- مكس احترافي: أول مشهد لازم يبقى photo لو فيه صورة لشخص مذكور في أول سطر. وأي مشهد موشن (stat/quote/list/headline/score...) لو سطره بيذكر شخص عنده صورة، الموشن بيتعمل فوق صورته تلقائي (bg). يعني نوّع: صورة كاملة ← موشن فوق صورة ← موشن ← صورة.
 - photo: {src,label,credit,title,accent?,badge?,zoom:"in"|"out",focusX:0-100} ← صورة الشخص (person) تظهر بس على سطر بيذكر اسمه صراحة. ممنوع تحط صورة لاعب على كلام عن مدرب أو نتيجة أو ترتيب أو شخص تاني. لو مفيش سطر بيذكره، ما تستخدمش صورته خالص.
 - headline: {kicker?:"عاجل|مفاجأة|رسميًا", title, accent?, sub?}
 - score: {home,away,hs:number,as:number,sub:"البطولة\\nاليوم والتاريخ",note?}
@@ -88,6 +89,25 @@ export function photoMismatches(sc, lines) {
     if (!nameIn(s.person, text)) bad.push(s);
   }
   return bad;
+}
+/** المكس الاحترافي: أي مشهد موشن بيتكلم عن شخص عنده صورة مؤكدة → الموشن يتعمل فوق صورته (bg). وصورة على كلام مش عنه → تتشال */
+export function mixPhotos(sc, lines, photos, log = () => {}, topic = '') {
+  const ids = lines.map((l) => l.id); const used = new Map();
+  for (const s of sc.scenes || []) if (s.type === 'photo') used.set(s.src, (used.get(s.src) || 0) + 1);
+  for (const s of sc.scenes || []) {
+    if (s.type === 'photo' || s.type === 'end') { delete s.bg; continue; }
+    const a = ids.indexOf(s.from), b = ids.indexOf(s.to);
+    const text = lines.slice(Math.max(0, a), Math.max(a, b) + 1).map((l) => l.vo).join(' ');
+    if (s.bg) { const p = photos.find((x) => x.src === s.bg); if (!p || !nameIn(p.person, text)) { delete s.bg; delete s.bgFocusX; } }
+    if (!s.bg) { const p = photos.filter((x) => nameIn(x.person, text)).sort((x, y) => (used.get(x.src) || 0) - (used.get(y.src) || 0))[0]; if (p) { s.bg = p.src; used.set(p.src, (used.get(p.src) || 0) + 1); } }
+    if (s.bg) { const p = photos.find((x) => x.src === s.bg); s.bgFocusX = p.focusX; s.bgPerson = p.person; }
+  }
+  // البداية دايمًا بصورة: لو أول مشهد من غير صورة، نحط صورة بطل القصة (لازم اسمه في عنوان القصة)
+  const first = (sc.scenes || [])[0]; const hero = photos.find((x) => nameIn(x.person, topic));
+  if (first && first.type !== 'photo' && first.type !== 'end' && !first.bg && hero) Object.assign(first, { bg: hero.src, bgFocusX: hero.focusX, bgPerson: hero.person });
+  const n = (sc.scenes || []).filter((s) => s.type === 'photo' || s.bg).length;
+  log(`🖼️ المكس: ${n} من ${(sc.scenes || []).length} مشهد فيهم صور حقيقية`);
+  return sc;
 }
 export function checkScenes(sc, lines) {
   const ids = lines.map((l) => l.id); const errs = [];

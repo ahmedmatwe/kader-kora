@@ -1,6 +1,6 @@
 // هوية «كادر كورة» — كل الألوان والخطوط والسرعات في مكان واحد (عدّل هنا بس).
 import React from 'react';
-import { staticFile, interpolate, spring, useCurrentFrame, useVideoConfig, Easing } from 'remotion';
+import { staticFile, interpolate, spring, useCurrentFrame, useVideoConfig, Easing, Img } from 'remotion';
 
 // اسم القناة: [الجزء الدهبي, الجزء الأبيض] — غيّره هنا بس وكل حاجة تتحدث
 export const CHANNEL: [string, string] = ['كادر', 'كورة'];
@@ -46,11 +46,17 @@ export function useOut(sceneFrames: number, len = 8) {
 }
 
 /** خلفية الهوية: تدرج كحلي + خطوط شبكة خفيفة متحركة */
+/** مكس احترافي: لو المشهد عنده صورة خلفية (bg)، الموشن جرافيك بيتعمل فوق صورة اللاعب الحقيقية (متعتمة وبتتحرك) */
+export const BgPhoto = React.createContext<{ src: string; focusX?: number } | null>(null);
 export const BrandBg: React.FC = () => {
-  const f = useCurrentFrame();
+  const f = useCurrentFrame(); const bg = React.useContext(BgPhoto);
   return (
     <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(120% 80% at 50% 30%, ${C.navy2} 0%, ${C.navy} 70%)` }}>
-      <div style={{ position: 'absolute', inset: 0, opacity: 0.08, backgroundImage: `linear-gradient(${C.white} 1px, transparent 1px), linear-gradient(90deg, ${C.white} 1px, transparent 1px)`, backgroundSize: '90px 90px', backgroundPosition: `0 ${f * 0.6}px` }} />
+      {bg && <>
+        <Img src={staticFile(bg.src)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: `${bg.focusX ?? 50}% 15%`, opacity: 0.42, transform: `scale(${1.08 + f * 0.0009})`, filter: 'saturate(1.1) contrast(1.05)' }} />
+        <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(180deg, rgba(8,16,40,0.55) 0%, rgba(8,16,40,0.78) 38%, rgba(8,16,40,0.92) 70%, rgba(8,16,40,0.97) 100%)` }} />
+      </>}
+      <div style={{ position: 'absolute', inset: 0, opacity: bg ? 0.05 : 0.08, backgroundImage: `linear-gradient(${C.white} 1px, transparent 1px), linear-gradient(90deg, ${C.white} 1px, transparent 1px)`, backgroundSize: '90px 90px', backgroundPosition: `0 ${f * 0.6}px` }} />
     </div>
   );
 };
