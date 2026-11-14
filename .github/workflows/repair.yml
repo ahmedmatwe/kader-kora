@@ -1,52 +1,46 @@
 name: repair
-# فريق الإصلاح الدائم: أول ما دورة المصنع تقع أو يطلع فيها تحذير، Claude يقرا السجل ويصلّح الكود ويرفعه فورًا.
-# وكمان أي طلب تطوير للبوت (issue عليه لابل «طلب») بيتنفذ هنا.
+# فريق الإصلاح الدائم في السحابة (Gemini بمفاتيح كادر كورة — من غير الماك ومن غير اشتراك Claude).
+# أول ما أي دورة تقع: يقرا السجل + كتاب الخبرة (REPAIR_PLAYBOOK.md)، يصلّح، يفحص، مراجع مستقل يوافق، وبعدين يرفع ويشغّل المصنع تاني.
 on:
   workflow_run: { workflows: [factory, publish, comments, stats], types: [completed] }
-  issues: { types: [labeled] }
-  workflow_dispatch: {}
-permissions: { contents: write, actions: write, issues: write, id-token: write }
+  workflow_dispatch: { inputs: { run_id: { description: 'رقم الدورة اللي وقعت', required: true } } }
+permissions: { contents: write, actions: write }
 concurrency: { group: repair, cancel-in-progress: false }
 jobs:
   fix:
-    if: >-
-      (github.event_name == 'workflow_dispatch') ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'failure') ||
-      (github.event_name == 'issues' && github.event.label.name == 'طلب' && github.event.issue.user.login == github.repository_owner)
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'failure'
     runs-on: ubuntu-latest
-    timeout-minutes: 40
-    env: { HAS_TOKEN: '${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '''' }}' }
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
+      WF: ${{ github.event.workflow_run.name || 'factory' }}
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 20 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: أدوات الفحص
+        run: cd motion && npm install --no-audit --no-fund --loglevel=error
       - name: سجل الدورة اللي وقعت
-        if: github.event_name == 'workflow_run'
-        env: { GH_TOKEN: '${{ github.token }}' }
-        run: gh run view ${{ github.event.workflow_run.id }} --log-failed | tail -300 > /tmp/failed.log || true
-      - name: Claude يصلّح
-        if: env.HAS_TOKEN == 'true'
-        uses: anthropics/claude-code-action@v1
-        with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          github_token: ${{ github.token }}
-          claude_args: --allowedTools "Bash,Read,Edit,Write,Glob,Grep"
-          prompt: |
-            إنت فريق الإصلاح الدائم لمصنع «كادر كورة» (شورتس كورة مصرية). اقرا README.md و ROADMAP.md الأول.
-            المهمة: ${{ github.event_name == 'issues' && format('نفّذ طلب التطوير ده: {0} — {1}', github.event.issue.title, github.event.issue.body) || 'دورة اتقعت. سجلها في /tmp/failed.log. لاقي السبب الجذري وصلّحه في الكود.' }}
-            قواعد ما تتكسرش:
-            - ما تغيّرش autoApprove ولا approvedBy في data/config.json، وما تنشرش أي فيديو، وما تلمسش ملفات queue/ غير لو الإصلاح محتاج كده بالظبط.
-            - ممنوع أي مفاتيح أو أسرار في الكود. ممنوع تلمس أي حاجة تخص «سر الموبايل».
-            - المصادر جرايد مصرية كبيرة بس، من غير شائعات، وصور محتشمة بس.
-            - اتأكد بـ node --check لكل ملف .mjs غيّرته، و npx tsc --noEmit -p motion لو غيّرت motion (اعمل npm install في motion الأول).
-            - لو السبب خارجي (كوتة، شبكة، موقع واقع) ما تغيّرش كود — اكتب ده بس.
-            - بعد الإصلاح: git add الملفات اللي غيّرتها بس، commit برسالة عربي قصيرة، git pull --rebase، git push.
-            - في الآخر اكتب سطرين بالمصري: كان فيه إيه، وصلّحت إيه.
+        run: gh run view "$RUN_ID" --log-failed > /tmp/failed.log 2>/dev/null || gh run view "$RUN_ID" --log | tail -400 > /tmp/failed.log || true
+      - name: فريق الإصلاح
+        run: node scripts/auto/repair.mjs /tmp/failed.log "$WF"
+      - name: رفع الإصلاح + تشغيل المصنع تاني
+        run: |
+          S=$(node -e "console.log(require('/tmp/repair.json').status)")
+          git config user.name "kader-repair"; git config user.email "repair@users.noreply.github.com"
+          git add data/repairs.json $(node -e "console.log((require('/tmp/repair.json').files||[]).join(' '))")
+          git diff --cached --quiet || (git commit -qm "فريق الإصلاح: $(node -e "console.log(require('/tmp/repair.json').message.split('\n')[0].slice(0,80))")" && git pull -q --rebase && git push -q)
+          if [ "$S" = fixed ] && [ "$WF" = factory ]; then gh workflow run factory.yml; fi
       - name: بلّغ صاحب القناة
         if: always()
         env:
           T: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           C: ${{ secrets.TELEGRAM_CHAT_ID }}
-          WHAT: ${{ github.event_name == 'issues' && github.event.issue.title || github.event.workflow_run.name }}
         run: |
-          if [ "$HAS_TOKEN" != true ]; then MSG="🛠️ فريق الإصلاح: «$WHAT» وقع، ومستني ربط اشتراك Claude علشان يصلّح لوحده."; else MSG="🛠️ فريق الإصلاح خلص شغله على «$WHAT» (${{ job.status }}). آخر تعديل: $(git log -1 --pretty=%s)"; fi
+          [ -f /tmp/repair.json ] || echo '{"status":"failed","message":"فريق الإصلاح نفسه وقع"}' > /tmp/repair.json
+          MSG=$(node -e "const r=require('/tmp/repair.json');const h={fixed:'🛠️ فريق الإصلاح صلّح غلطة',external:'🌐 وقعة من برّه (كوتة/شبكة) — المصنع هيكمّل لوحده',diagnosed:'🔍 فريق الإصلاح شخّص الغلطة',failed:'⚠️ فريق الإصلاح ما قدرش يصلّح بأمان',['gave-up']:'🆘 غلطة اتكررت — محتاجة تدخل',skip:'ℹ️ فريق الإصلاح'}[r.status]||r.status;console.log(h+' في «'+process.env.WF+'»:\n'+r.message)")
           [ -n "$T" ] && curl -s -o /dev/null "https://api.telegram.org/bot$T/sendMessage" --data-urlencode "chat_id=$C" --data-urlencode "text=$MSG" || true
