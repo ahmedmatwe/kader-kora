@@ -1,9 +1,9 @@
-// تعليق صوتي سطر بسطر بـGemini TTS (نفس صوت سر الموبايل). node scripts/voice.mjs videos/01-x
+// تعليق صوتي سطر بسطر بـGemini TTS . node scripts/voice.mjs videos/01-x
 // بيطلع: voice/<id>.wav لكل سطر + voice/timing.json (مدة كل سطر)
 import fs from 'node:fs'; import path from 'node:path';
-const env = Object.fromEntries(fs.readFileSync(`${process.env.HOME}/Desktop/youtube-ai-studio/.env`, 'utf8').split('\n').filter((l) => /^[A-Z_0-9]+=/.test(l)).map((l) => [l.split('=')[0], l.slice(l.indexOf('=') + 1).trim().replace(/^"|"$/g, '')]));
-const keys = [env.GEMINI_API_KEY, env.GEMINI_API_KEY_2].filter(Boolean).flatMap((k) => k.split(','));
-const models = (env.GEMINI_TTS_MODEL || 'gemini-2.5-flash-preview-tts').split(',');
+import { keys as kaderKeys } from './auto/ai.mjs';
+const keys = kaderKeys();
+const models = (process.env.GEMINI_TTS_MODEL || 'gemini-3.8-flash-tts,gemini-3.1-flash-tts-preview,gemini-2.5-flash-preview-tts').split(',');
 const voiceName = process.env.VOICE || 'Fenrir';
 const dir = process.argv[2]; const out = process.env.OUT || path.join(dir, 'voice'); fs.mkdirSync(out, { recursive: true });
 const { lines } = JSON.parse(fs.readFileSync(path.join(dir, 'script.json'), 'utf8'));

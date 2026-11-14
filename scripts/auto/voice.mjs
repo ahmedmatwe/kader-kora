@@ -2,11 +2,11 @@
 // بعدين faster-whisper يطلّع وقت كل كلمة → نقسم الصوت لسطور (voice/<id>.wav) → build_plan يكمل زي ما هو.
 // مراجعة الصوت: النص اللي اتسمع لازم يطابق السكريبت ≥ 80% وإلا نعيد (مرة واحدة).
 import fs from 'node:fs'; import path from 'node:path'; import { execFileSync } from 'node:child_process';
-import { key } from './ai.mjs';
+import { keys as kaderKeys } from './ai.mjs';
 const FF = fs.existsSync('/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg') ? '/opt/homebrew/opt/ffmpeg-full/bin/' : '';
 const MODELS = (process.env.GEMINI_TTS_MODEL || 'gemini-3.8-flash-tts,gemini-3.1-flash-tts-preview,gemini-2.5-flash-preview-tts').split(',');
 const NOTES = 'Energetic Egyptian football presenter from Cairo, speaking Egyptian colloquial Arabic: punchy, excited but controlled, like a match-day sports show host; fast rhythm, strong emphasis on numbers and names; clear diction; never shouting. Leave a short natural pause between paragraphs.';
-const keys = () => (process.env.GEMINI_API_KEY || key()).split(',').map((k) => k.trim()).filter(Boolean);
+const keys = kaderKeys;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 function wav(pcm, rate = 24000) { const h = Buffer.alloc(44); h.write('RIFF', 0); h.writeUInt32LE(36 + pcm.length, 4); h.write('WAVE', 8); h.write('fmt ', 12); h.writeUInt32LE(16, 16); h.writeUInt16LE(1, 20); h.writeUInt16LE(1, 22); h.writeUInt32LE(rate, 24); h.writeUInt32LE(rate * 2, 28); h.writeUInt16LE(2, 32); h.writeUInt16LE(16, 34); h.write('data', 36); h.writeUInt32LE(pcm.length, 40); return Buffer.concat([h, pcm]); }
 

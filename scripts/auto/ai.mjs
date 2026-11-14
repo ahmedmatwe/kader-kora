@@ -1,23 +1,25 @@
-// Gemini: نص/JSON/صوت/رؤية. المفتاح GEMINI_API_KEY (على السحابة secret، على الماك من .env بتاع سر البراند).
+// Gemini: نص/JSON/صوت/رؤية. المفاتيح: GEMINI_API_KEY (على السحابة secret، مفصولة بفاصلة) أو ~/.kader-kora/gemini على الماك.
 import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path';
-export function key() {
-  if (process.env.GEMINI_API_KEY) return process.env.GEMINI_API_KEY.split(',')[0].trim();
-  const own = path.join(os.homedir(), '.kader-kora/gemini'); if (fs.existsSync(own)) return fs.readFileSync(own, 'utf8').trim(); // مفتاح كادر كورة الخاص
-  const f = path.join(os.homedir(), 'Desktop/youtube-ai-studio/.env');
-  const l = fs.existsSync(f) && fs.readFileSync(f, 'utf8').split('\n').find((x) => x.startsWith('GEMINI_API_KEY='));
-  if (!l) throw new Error('مفيش GEMINI_API_KEY'); return l.slice(15).trim().replace(/^"|"$/g, '').split(',')[0];
+// مفاتيح كادر كورة بس (2-3 مفاتيح من مشاريع Google مختلفة = كوتة أكبر). ممنوع مفتاح سر الموبايل.
+export function keys() {
+  const own = path.join(os.homedir(), '.kader-kora/gemini');
+  const raw = process.env.GEMINI_API_KEY || (fs.existsSync(own) ? fs.readFileSync(own, 'utf8') : '');
+  const list = raw.split(/[,\s]+/).map((k) => k.trim()).filter((k) => k.startsWith('AIza'));
+  if (!list.length) throw new Error('مفيش مفتاح Gemini لكادر كورة — شغّل scripts/connect-gemini.sh');
+  return list;
 }
+export const key = () => keys()[0];
 const WRITE = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-flash-latest', 'gemini-3-flash-preview'];
 const LIGHT = ['gemini-3.5-flash-lite', 'gemini-flash-lite-latest', 'gemini-3.5-flash'];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function call(models, parts, gen) {
   let last = '';
-  for (let pass = 0; pass < 2; pass++) for (const m of models) {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key() }, body: JSON.stringify({ contents: [{ parts }], generationConfig: gen }), signal: AbortSignal.timeout(180000) }).catch((e) => ({ ok: false, status: 0, json: async () => ({ error: { message: e.message } }) }));
+  for (let pass = 0; pass < 2; pass++) for (const m of models) for (const k of keys()) {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': k }, body: JSON.stringify({ contents: [{ parts }], generationConfig: gen }), signal: AbortSignal.timeout(180000) }).catch((e) => ({ ok: false, status: 0, json: async () => ({ error: { message: e.message } }) }));
     const j = await r.json().catch(() => ({}));
     const p = j.candidates?.[0]?.content?.parts; if (r.ok && p) return p;
-    last = `${m} ${r.status} ${(j.error?.message || '').slice(0, 120)}`; await sleep(r.status === 429 ? 8000 : 2000);
+    last = `${m} ${r.status} ${(j.error?.message || '').slice(0, 120)}`; await sleep(r.status === 429 ? 1500 : 2000);
   }
   throw new Error(`Gemini فشل: ${last}`);
 }
