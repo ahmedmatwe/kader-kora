@@ -35,7 +35,9 @@ process.on('unhandledRejection', onErr); process.on('uncaughtException', onErr);
 const requests = readJson(path.join(ROOT, 'data/requests.json'), []);
 const req = requests.find((r) => r.status === 'pending');
 log('🔎 بدوّر على أقوى تريند في الجرايد الكبيرة');
-const story = await pickStory({ recent, log, request: req?.text });
+const lastQ = [...flog.runs].reverse().find((r) => r.status === 'queued');
+const idleMin = lastQ ? Math.round((Date.now() - new Date(lastQ.at)) / 60000) : 999;
+const story = await pickStory({ recent, log, request: req?.text, idleMin });
 if (req) { req.status = story ? 'done' : 'not-found'; req.at2 = new Date().toISOString(); writeJson(path.join(ROOT, 'data/requests.json'), requests); if (!story) await tell(`🔎 الموضوع اللي طلبته «${req.text}» ما لقيتهوش في جريدتين كبار — مش هعمله عشان المصداقية.`); }
 if (!story) await done('no-story');
 if (!DRY) await tell(`🎬 بدأت في فيديو جديد:\n«${story.topic}»\n📰 ${new Set(story.sources.map((x) => x.paper)).size} جرايد · ${new Date().toLocaleTimeString('ar-EG', { timeZone: 'Africa/Cairo', hour: 'numeric', minute: '2-digit' })}\n\nالفيديو عن إيه:\n${(story.facts || []).slice(0, 3).map((f) => `• ${f.fact || f}`).join('\n')}\n\nهبعتلك الفيديو أول ما يجهز.`);

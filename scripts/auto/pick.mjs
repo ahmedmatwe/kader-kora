@@ -17,7 +17,7 @@ export async function googleTrends() {
 const POLICY = `سياسة القناة: كورة/رياضة مصرية بالأساس، والعالمي بس لو يهم مصر (لاعب مصري، منتخب، أندية مصرية، بطولة مصر فيها).
 ممنوع: شائعات من غير مصدرين، وفيات/حوادث/جرائم/أمراض لاعبين، سياسة أو دين، تشهير أو اتهام لحد، حياة شخصية، مراهنات.`;
 
-export async function pickStory({ recent = [], log = console.log, request = '' } = {}) {
+export async function pickStory({ recent = [], log = console.log, request = '', idleMin = 0 } = {}) {
   // 1) أخبار الجرايد الكبيرة آخر 24 ساعة (ولو صاحب القناة طالب موضوع، بندوّر عليه هو الأول)
   const hits = []; const seen = new Set();
   if (request) { for (const h of await search(request, 4)) if (!seen.has(h.url)) { seen.add(h.url); hits.push({ ...h, searched: request }); } log(`📝 طلب صاحب القناة: «${request}» — ${hits.length} خبر`); }
@@ -42,11 +42,15 @@ ${request ? `- صاحب القناة طالب الموضوع ده بالاسم: 
 رجّع JSON {"stories":[{"topic":"وصف القصة في سطر","slug":"english-slug-2-4-words","ids":[أرقام العناوين],"why":"ليه تريند","type":"news|match-reaction|evergreen","searched":true|false}]}`, { temp: 0.3, fast: true });
   const stories = Array.isArray(r) ? r : (r.stories || []);
   // ترتيب التريند في الكود: مرتبطة ببحث الناس > عدد الجرايد اللي كاتبة عنها. أقل من 3 جرايد ومن غير بحث = مش تريند
-  const trendScore = (st) => { const hs = (st.ids || []).map((i) => hits[i]).filter(Boolean); const papers = new Set(hs.map((h) => h.paper)).size; return (hs.some((h) => h.searched) ? 10 : 0) + papers * 2; };
+  // التغطية الحقيقية: كل عنوان في أي جريدة بيتكلم عن نفس القصة (مش بس اللي رئيس التحرير اختاره)
+  const trendScore = (st) => { const hs = [...(st.ids || []).map((i) => hits[i]).filter(Boolean), ...hits.filter((h) => overlap(h.title, st.topic) >= 0.35)]; const papers = new Set(hs.map((h) => h.paper)).size; st.papers = papers; return (hs.some((h) => h.searched) ? 10 : 0) + papers * 2; };
   for (const st of stories) st.trend = trendScore(st);
   stories.sort((a, b) => b.trend - a.trend);
-  for (const st of stories.filter((x) => x.trend < 6 && !request)) log(`⊘ «${st.topic}»: مش تريند كفاية (${st.trend})`);
-  stories.splice(0, stories.length, ...stories.filter((x) => x.trend >= 6 || request));
+  // لو بقالنا كتير من غير فيديو، ناخد أقوى خبر متداول في جريدتين (الإنتاج ما يقفش) — غير كده تريند بس
+  const minScore = request ? 0 : (idleMin >= 90 ? 4 : 6);
+  for (const st of stories.filter((x) => x.trend < minScore)) log(`⊘ «${st.topic}»: مش تريند كفاية (${st.papers} جرايد${st.trend >= 10 ? ' + بحث' : ''})`);
+  if (minScore === 4) log(`⏱️ بقالنا ${idleMin} دقيقة من غير فيديو — بناخد أقوى خبر متداول`);
+  stories.splice(0, stories.length, ...stories.filter((x) => x.trend >= minScore));
   if (!stories.length) log(`⊘ رئيس التحرير ما اختارش قصص: ${JSON.stringify(r).slice(0, 200)}`);
   for (const s of stories) {
     const dup = recent.find((t) => overlap(t, s.topic) >= 0.3);
