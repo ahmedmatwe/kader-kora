@@ -6,10 +6,11 @@ import { PhotoLabel } from './parts';
 
 const Title: React.FC<{ text: string; accent?: string; top?: number; size?: number; delay?: number }> = ({ text, accent, top = SAFE.top + 220, size = 84, delay = 0 }) => {
   const p = useIn(delay);
-  const parts = accent ? text.split(accent) : [text];
+  const i = accent ? text.indexOf(accent) : -1; // لو الكلمة المميزة مش جوه النص ما نلزقهاش فيه
+  const parts = i >= 0 ? [text.slice(0, i), text.slice(i + accent!.length)] : [text];
   return (
     <div style={{ position: 'absolute', top, left: SAFE.left, right: SAFE.right, textAlign: 'center', ...ar, fontWeight: 900, fontSize: size, lineHeight: 1.25, opacity: p, transform: `translateY(${(1 - p) * 40}px)`, textShadow: '0 8px 30px rgba(0,0,0,0.6)' }}>
-      {accent ? <>{parts[0]}<span style={{ color: C.gold }}>{accent}</span>{parts[1]}</> : text}
+      {i >= 0 ? <>{parts[0]}<span style={{ color: C.gold }}>{accent}</span>{parts[1]}</> : text}
     </div>
   );
 };
