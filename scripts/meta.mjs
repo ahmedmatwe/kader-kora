@@ -20,13 +20,24 @@ export async function check(c = metaCreds()) {
   const p = await graph(c, c.pageId, { fields: 'name,link,instagram_business_account{username}' }, 'GET');
   return { page: p.name, link: p.link, instagram: p.instagram_business_account?.username };
 }
+// قفل أمان: ممنوع ننشر على أي صفحة غير «كادر كورة» (عشان ما يحصلش خلط مع سر الموبايل أو غيرها)
+let verified = false;
+export async function guard(c = metaCreds()) {
+  if (verified) return;
+  const p = await graph(c, c.pageId, { fields: 'name,instagram_business_account{username}' }, 'GET');
+  const ig = p.instagram_business_account?.username || '';
+  if (!/كادر\s*كور|kader/i.test(p.name) || (c.igId && c.igId !== '-' && !/kader/i.test(ig))) throw new Error(`🔒 قفل الأمان: المفتاح ده لصفحة «${p.name}» / @${ig} مش كادر كورة — النشر اتوقف`);
+  verified = true;
+}
 export async function facebookReel(file, description, c = metaCreds()) {
+  await guard(c);
   const st = await graph(c, `${c.pageId}/video_reels`, { upload_phase: 'start' });
   await rupload(c, st.upload_url ?? `https://rupload.facebook.com/video-upload/${V}/${st.video_id}`, file);
   await graph(c, `${c.pageId}/video_reels`, { upload_phase: 'finish', video_id: st.video_id, video_state: 'PUBLISHED', description });
   return { id: String(st.video_id), url: `https://www.facebook.com/reel/${st.video_id}` };
 }
 export async function instagramReel(file, caption, coverMs = 1500, c = metaCreds()) {
+  await guard(c);
   for (let i = 0; ; i++) {
     try {
       const k = await graph(c, `${c.igId}/media`, { media_type: 'REELS', upload_type: 'resumable', caption, share_to_feed: 'true', thumb_offset: String(coverMs) });
