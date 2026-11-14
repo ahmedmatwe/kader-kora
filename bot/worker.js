@@ -155,7 +155,7 @@ async function gemini(env, contents) {
   const keys = (env.GEMINI_API_KEY || '').split(',').map((k) => k.trim()).filter(Boolean);
   let last = '';
   for (const m of ['gemini-3.5-flash', 'gemini-flash-latest', 'gemini-3.5-flash-lite']) for (const k of keys) {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': k }, body: JSON.stringify({ systemInstruction: { parts: [{ text: SYSTEM }] }, contents, tools: [{ functionDeclarations: DECL }], generationConfig: { temperature: 0.3 } }) });
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': k }, body: JSON.stringify({ systemInstruction: { parts: [{ text: SYSTEM }] }, contents, tools: [{ functionDeclarations: DECL }], generationConfig: { temperature: 0.3, thinkingConfig: { thinkingBudget: 0 } } }), signal: AbortSignal.timeout(20000) }).catch(() => ({ ok: false, status: 0, json: async () => ({}) }));
     const j = await r.json().catch(() => ({})); const c = j.candidates?.[0]?.content;
     if (r.ok && c) return c; last = `${m} ${r.status}`;
   }
@@ -206,6 +206,12 @@ async function onButton(env, q) {
 }
 
 export default {
+  // ⏰ إنتاج مستمر: كل 20 دقيقة لو مفيش دورة شغالة → نبدأ دورة جديدة (المصنع نفسه بيوقف عند الحد اليومي)
+  async scheduled(ev, env, ctx) {
+    const busy = await (await fetch(`${GH}/repos/${REPO}/actions/workflows/factory.yml/runs?per_page=3`, { headers: ghH(env) })).json();
+    if ((busy.workflow_runs || []).some((r) => ['queued', 'in_progress', 'waiting', 'requested', 'pending'].includes(r.status))) return;
+    await dispatch(env, 'factory.yml');
+  },
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
     if (url.pathname === '/setup' && req.headers.get('authorization') === `Bearer ${env.INGEST_SECRET}`) {

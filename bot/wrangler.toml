@@ -6,3 +6,4 @@ compatibility_date = "2025-06-01"
 [[kv_namespaces]]
 binding = "MEM"
 id = "da26c65a77f64b3794cf7e9b7330e07c"
+
