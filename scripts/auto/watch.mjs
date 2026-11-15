@@ -72,7 +72,7 @@ ${arts.map((a, i) => `### [${i}] ${a.paper} — ${a.title} (${a.at ? new Date(a.
 
 const MAIN = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
 // متابعة لحظية: جولة كل 3 دقايق لحد LOOP_MIN (على السحابة 50 دقيقة، وبعدها الورك فلو يشغّل نفسه تاني = ما بيقفش)
-const LOOP_MIN = +(process.env.LOOP_MIN || 0); const T0 = Date.now(); let newDenial = false;
+const LOOP_MIN = +(process.env.LOOP_MIN || 0); const T0 = Date.now(); let newDenial = false; let nudgedAt = 0;
 const sh = (c, a) => { try { return execFileSync(c, a, { cwd: ROOT, stdio: 'pipe' }).toString(); } catch (e) { return ''; } };
 async function round() {
   if (LOOP_MIN) { try { execFileSync('git', ['pull', '-q', '--rebase', '-X', 'theirs'], { cwd: DATA_DIR, stdio: 'pipe' }); } catch { try { execFileSync('git', ['rebase', '--abort'], { cwd: DATA_DIR, stdio: 'pipe' }); } catch {} } } // التذاكر الجديدة أول ما تتعمل
@@ -121,6 +121,8 @@ for (const { f, t } of tickets) {
 }
   W.runs = [...(W.runs || []), { at: new Date().toISOString(), watched: tickets.length }].slice(-50);
   if (!DRY) { writeJson(WF, W); if (LOOP_MIN) persist('متابعة النفي'); }
+  // نبضة للمصنع: كرون جيت هب بيتأخر ساعات، ففريق المتابعة (شغال على طول) بيصحّي المصنع لو ما اشتغلش من 35 دقيقة
+  if (LOOP_MIN && !DRY && !newDenial) { const fr = readJson(path.join(ROOT, 'data/factory.json'), { runs: [] }).runs || []; const last = fr.length ? Date.now() - new Date(fr[fr.length - 1].at) : 1e12; if (last > 35 * 60e3 && !nudgedAt || (nudgedAt && Date.now() - nudgedAt > 35 * 60e3 && last > 35 * 60e3)) { sh('gh', ['workflow', 'run', 'factory.yml']); nudgedAt = Date.now(); log('⏰ صحّيت المصنع'); } }
   if (newDenial && LOOP_MIN && !DRY) { sh('gh', ['workflow', 'run', 'factory.yml']); log('🎬 شغّلت المصنع على فيديو النفي'); newDenial = false; }
 }
 if (MAIN) {

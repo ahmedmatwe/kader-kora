@@ -25,8 +25,10 @@ const done = async (status, extra = {}) => { if (!QUIET_STATUS.includes(status) 
 
 if (!cfg.enabled) await done('disabled');
 // حد يومي (الكوتة): ما نعملش أكتر من dailyTarget في اليوم
-const today = new Date().toISOString().slice(0, 10);
-const madeToday = flog.runs.filter((r) => r.status === 'queued' && r.at.startsWith(today)).length;
+// اليوم بتوقيت مصر (مش UTC): الحد بيتصفّر 12 بالليل في القاهرة مش 2 الفجر
+const cairoDay = (d) => new Date(d).toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' });
+const today = cairoDay(Date.now());
+const madeToday = flog.runs.filter((r) => r.status === 'queued' && cairoDay(r.at) === today).length;
 const requests = readJson(path.join(ROOT, 'data/requests.json'), []);
 // فيديو النفي (من فريق متابعة النفي) ليه الأولوية على أي حاجة، وما بيقفش عند الحد اليومي
 const req = requests.find((r) => r.status === 'pending' && r.kind === 'denial') || requests.find((r) => r.status === 'pending');
