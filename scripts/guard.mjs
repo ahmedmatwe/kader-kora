@@ -9,7 +9,8 @@ import { overlap } from './auto/pick.mjs';
 import { json } from './auto/ai.mjs';
 const V = 'v27.0';
 const norm = (s) => String(s || '').replace(/https?:\/\/\S+/g, '').replace(/[#\s‏‎]+/g, ' ').trim().slice(0, 90);
-const same = (a, b) => { const x = norm(a), y = norm(b); return x.length > 15 && (x === y || x.startsWith(y.slice(0, 60)) || y.startsWith(x.slice(0, 60))); };
+// الاتنين لازم يبقوا نص حقيقي (وصف فاضي على المنصة كان بيطابق أي فيديو)، والمقارنة على أول 60 حرف أو النص كله لو أقصر
+const same = (a, b) => { const x = norm(a), y = norm(b); if (x.length < 16 || y.length < 16) return false; const n = Math.min(60, x.length, y.length); return x === y || x.slice(0, n) === y.slice(0, n); };
 async function g(path, params) {
   const c = metaCreds(); const r = await fetch(`https://graph.facebook.com/${V}/${path}?${new URLSearchParams({ ...params, access_token: c.token })}`);
   const j = await r.json(); if (j.error) throw new Error(j.error.message); return j;
@@ -42,7 +43,7 @@ export function persist(msg) {
   try { git('add', '-A'); git('diff', '--cached', '--quiet'); return true; } catch {} // مفيش تغيير = تمام
   try { git('commit', '-qm', msg); } catch { return false; }
   for (let i = 0; i < 6; i++) {
-    try { git('pull', '-q', '--rebase', '-X', 'theirs'); git('push', '-q'); return true; } catch { execFileSync('sleep', [String(3 + i * 4)]); }
+    try { git('pull', '-q', '--rebase', '-X', 'theirs'); git('push', '-q'); return true; } catch { try { git('rebase', '--abort'); } catch {} execFileSync('sleep', [String(3 + i * 4)]); } // rebase واقف = كل المحاولات الجاية كانت بتقع
   }
   return false;
 }
@@ -54,13 +55,14 @@ export async function sameNews(t, pack, ledger) {
   const near = old.filter((x) => overlap(x.title || '', mine) >= 0.34);
   if (!near.length) return '';
   // فيديو تصحيح قدام فيديو تصحيح تاني بنفس الكلام = تكرار أكيد (من غير موديل) — درس تصحيح صلاح 68 اللي نزل 3 مرات
-  if (t.kind === 'denial') { const tw = near.find((x) => /denial/.test(x.video)); if (tw) return `${tw.title} (نفس التصحيح اتنشر قبل كده)`; }
+  if (t.kind === 'denial') { const tw = near.find((x) => /denial/.test(x.video) && overlap(x.title || '', mine) >= 0.5); if (tw) return `${tw.title} (نفس التصحيح اتنشر قبل كده)`; }
   const r = await json(`إنت حارس النشر في قناة كورة. صاحب القناة مش عاوز **نفس الموضوع يتكرر** في فيديوهين (مش بس نفس الفيديو).
 الفيديو اللي هيتنشر: «${mine}»
 فيديوهات اتنشرت فعلًا آخر 3 أيام:
 ${near.map((x, i) => `${i}. ${x.title}`).join('\n')}
 dup=true لو الجديد عن **نفس الموضوع** بتاع واحد منهم: نفس الشخص/الحدث/القضية، حتى لو بزاوية تانية أو تصريحات جديدة أو تفاصيل زيادة أو ردود فعل.
 dup=false بس لو فيه **تطور كبير جديد** غيّر الموضوع: نتيجة ماتش اتلعب، قرار رسمي اتاخد بعد ما كان كلام، صفقة اتقفلت، إصابة اتأكدت، أو نفي/تصحيح لأول مرة.
-رجّع JSON {"dup":true|false,"index":0,"why":""}`, { temp: 0 });
+رجّع JSON {"dup":true|false,"index":0,"why":""}`, { temp: 0 }).catch(() => null);
+  if (!r) { const sure = near.find((x) => overlap(x.title || '', mine) >= 0.6); return sure ? `${sure.title} (تشابه كبير والموديل ما ردّش)` : ''; } // الكوتة خلصت: ما نعدّيش تكرار واضح
   return r.dup ? `${near[r.index]?.title || near[0].title} (${r.why})` : '';
 }
