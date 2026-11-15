@@ -37,7 +37,8 @@ for (const f of fs.existsSync(qdir) ? fs.readdirSync(qdir).filter((x) => x.endsW
     const connected = plat === 'youtube' || ((plat === 'facebook' || plat === 'instagram') && process.env.META_PAGE_TOKEN);
     if (!connected) { console.log(`… ${t.id}/${plat}: المنصة لسه مش متربطة على السحابة`); continue; }
     // فيس وإنستا مالهمش جدولة في الـAPI بتاعنا → بننشر لما الميعاد ييجي (المهمة بتصحى كل نص ساعة)
-    if (plat !== 'youtube' && job.at && new Date(job.at) > new Date()) { console.log(`⏳ ${t.id}/${plat}: ميعاده ${job.at}`); continue; }
+    if (plat !== 'youtube' && job.at && new Date(job.at) - Date.now() > 30 * 60e3) { // اللي ميعاده خلال نص ساعة بينزل دلوقتي (مانستناش دورة نشر تانية ممكن تتأخر)
+      console.log(`⏳ ${t.id}/${plat}: ميعاده ${job.at}`); continue; }
     // 🔒 حارس النشر: (1) المنصة نفسها — منشور قبل كده؟ (2) حجز مرفوع للريبو قبل النشر، ولو ما اترفعش ما ننشرش
     {
       const pk = readJson(path.join(vdir, 'publish.json'), null); if (!pk?.[plat]) { console.log(`⊘ ${t.id}/${plat}: مفيش publish.json`); continue; }

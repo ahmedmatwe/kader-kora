@@ -178,7 +178,8 @@ execFileSync('gh', ['release', 'create', '-R', DATA_REPO, rel, social, yt, path.
 const sched = JSON.parse(execFileSync('node', [path.join(ROOT, 'scripts/schedule.mjs'), '--type', story.type || 'news'], { encoding: 'utf8' }).trim().split('\n').pop());
 const queued = fs.readdirSync(path.join(ROOT, 'queue')).filter((x) => x.endsWith('.json')).map((x) => readJson(path.join(ROOT, 'queue', x)));
 const slot = (p) => { // نشر مباشر (cfg.publishNow): دلوقتي على طول — بس مش فيديوهين على نفس المنصة في أقل من 20 دقيقة
-  const now = !!cfg.publishNow; let at = now ? Date.now() : new Date(sched[p]).getTime();
+  const now = !!cfg.publishNow; if (now) return new Date().toISOString(); // الأخبار تنزل على طول — من غير فاصل ولا تأخير (طلب صاحب القناة)
+  let at = new Date(sched[p]).getTime();
   for (let i = 0; i < 80; i++) {
     const h = cairoHour(new Date(at).toISOString());
     const live = queued.filter((q) => q.platforms?.[p]?.status !== 'cancelled');
