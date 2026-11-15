@@ -18,7 +18,7 @@ const LOGF = path.join(ROOT, 'data/factory.json'); const flog = readJson(LOGF, {
 const cfg = readJson(path.join(ROOT, 'data/config.json'), { autoApprove: false, dailyTarget: 12, platforms: ['youtube', 'facebook', 'instagram'] });
 const T0 = Date.now(); const lines = []; const cur = { topic: '', id: '' };
 const log = (s) => { const m = `[${((Date.now() - T0) / 60000).toFixed(1)}د] ${s}`; console.log(m); lines.push(s); live({ ...cur, stage: s.slice(0, 200) }); };
-const QUIET_STATUS = ['disabled', 'daily-target-reached', 'no-story', 'dry', 'dup-news', 'denied-before'];
+const QUIET_STATUS = ['disabled', 'daily-target-reached', 'no-story', 'dry', 'dup-news', 'denied-before', 'spacing'];
 const done = async (status, extra = {}) => { if (!QUIET_STATUS.includes(status) && status !== 'queued') await tell(`⚠️ فيديو ما كملش (${status})${extra.topic ? `\n«${extra.topic}»` : ''}\n${lines.slice(-2).join('\n')}`); flog.runs.push({ at: new Date().toISOString(), status, ...extra, log: lines.slice(-40) });
   if (!['queued', 'dry'].includes(status) && extra.id) fs.rmSync(path.join(ROOT, 'videos', extra.id), { recursive: true, force: true }); // فيديو ما كملش ما يفضلش في الريبو
   flog.runs = flog.runs.slice(-200); await live({ ...cur, stage: `خلصت الدورة: ${status}` }); writeJson(LOGF, flog); console.log(`\n== ${status}`); process.exit(0); };
@@ -32,6 +32,9 @@ const requests = readJson(path.join(ROOT, 'data/requests.json'), []);
 const req = requests.find((r) => r.status === 'pending' && r.kind === 'denial') || requests.find((r) => r.status === 'pending');
 const DENIAL = req?.kind === 'denial' ? req : null;
 if (madeToday >= cfg.dailyTarget && !DENIAL) await done('daily-target-reached', { madeToday });
+// ساعة بين كل فيديو والتاني (طلب صاحب القناة) — فيديو النفي/التصحيح بس مستعجل ومن غير انتظار
+{ const lq = [...flog.runs].reverse().find((r) => r.status === 'queued'); const since = lq ? (Date.now() - new Date(lq.at)) / 60000 : 999;
+  const gap = cfg.gapMin ?? 60; if (!DENIAL && since < gap) await done('spacing', { waitMin: Math.ceil(gap - since) }); }
 
 // 1) التريند + التحقيق
 const topics = readJson(path.join(ROOT, 'data/topics.json'), []);
