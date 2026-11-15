@@ -106,6 +106,9 @@ for (const { f, t } of tickets) {
 
   // 2) فيديو النفي: لازم النفي نفسه يتأكد من جريدتين كبار (نفس قاعدة القناة)
   let reqd = false;
+  // نفس التصحيح اتعمله فيديو قبل كده (لخبر تاني فيه نفس الرقم)؟ → نربطه بيه ومش بنعمل فيديو تاني (درس: تصحيح صلاح 68 اتعمل 3 مرات)
+  const twin = requests.find((r) => r.kind === 'denial' && Date.now() - new Date(r.at) < 7 * 86400e3 && overlap(r.story?.denial?.summary || r.text || '', j.summary) >= 0.25);
+  if (twin) { log(`🔗 ${t.id}: نفس تصحيح اتعمله فيديو قبل كده (${twin.video || twin.corrects}) — مش هنعمل فيديو تاني`); Object.assign(st, { requested: true, sameAs: twin.video || twin.corrects }); changed.add(WF); continue; }
   if (src.length >= 2) {
     const v = await verify({ topic: `نفي رسمي: ${j.summary} (تصحيح لخبر «${story.topic}»)`, slug: `denial-${story.slug || 'news'}`.slice(0, 30), type: 'news' }, src, log, []).catch((e) => (log(`⊘ التحقق: ${e.message}`), null));
     if (v && !DRY) {

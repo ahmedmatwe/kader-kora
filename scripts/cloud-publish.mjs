@@ -43,7 +43,7 @@ for (const f of fs.existsSync(qdir) ? fs.readdirSync(qdir).filter((x) => x.endsW
       const pk = readJson(path.join(vdir, 'publish.json'), null); if (!pk?.[plat]) { console.log(`⊘ ${t.id}/${plat}: مفيش publish.json`); continue; }
       let hit; try { hit = await alreadyOut(plat, pk); } catch (e) { console.log(`🔒 ${t.id}/${plat}: ما قدرتش أتأكد من المنصة (${e.message}) — مش هنشر المرة دي`); continue; }
       if (hit) { Object.assign(job, { status: plat === 'youtube' ? 'scheduled' : 'published', id: hit.id, url: hit.url, doneAt: new Date().toISOString(), guard: 'لقيته منشور على المنصة' }); console.log(`🔒 ${t.id}/${plat}: منشور قبل كده ${hit.url} — مش هيتنشر تاني`); writeJson(p, t); persist(`حارس النشر: ${t.id}/${plat} منشور قبل كده`); changed = true; continue; }
-      if (t.kind !== 'denial') { const d = await sameNews(t, pk, readJson(path.join(ROOT, 'data/posts.json'), [])).catch(() => '');
+      { const led = readJson(path.join(ROOT, 'data/posts.json'), []); const d = await sameNews(t, pk, t.kind === 'denial' ? led.filter((x) => /denial/.test(x.video)) : led).catch(() => '');
         if (d) { for (const j2 of Object.values(t.platforms)) if (['pending', 'retry'].includes(j2.status)) Object.assign(j2, { status: 'cancelled', why: `تكرار خبر: ${d}` }); writeJson(p, t); persist(`حارس النشر: ${t.id} نفس خبر اتنشر`); console.log(`🔒 ${t.id}: نفس خبر اتنشر قبل كده — اتلغى: ${d}`); await tellOwner(`🔒 حارس النشر وقف فيديو مكرر\n«${t.topic}»\nنفس خبر: ${d}`); changed = true; break; } }
       const prev = job.status; Object.assign(job, { status: 'publishing', claimAt: new Date().toISOString() }); writeJson(p, t);
       if (!persist(`حارس النشر: حجز ${t.id}/${plat}`)) { job.status = prev; delete job.claimAt; writeJson(p, t); console.log(`🔒 ${t.id}/${plat}: الحجز ما اترفعش — مش هنشر`); continue; }
@@ -63,7 +63,7 @@ for (const f of fs.existsSync(qdir) ? fs.readdirSync(qdir).filter((x) => x.endsW
     try {
       // نزّل ملفات الفيديو من الريليس الخاص
       execFileSync('gh', ['release', 'download', '-R', DATA_REPO, t.release, '--dir', path.join(vdir, 'final'), '--clobber'], { stdio: 'inherit', env: dataEnv() });
-      const out = execFileSync('node', [path.join(ROOT, 'scripts/publish-youtube.mjs'), `videos/${t.id}`, ...(job.at ? ['--at', job.at] : [])], { encoding: 'utf8' });
+      const out = execFileSync('node', [path.join(ROOT, 'scripts/publish-youtube.mjs'), `videos/${t.id}`, ...(job.at && new Date(job.at) - Date.now() > 20 * 60e3 ? ['--at', job.at] : [])] /* نشر مباشر: الميعاد قريب = علني على طول (يوتيوب بيرفض جدولة أقل من ربع ساعة) */, { encoding: 'utf8' });
       console.log(out); const url = out.match(/https:\/\/youtube\.com\/shorts\/\S+/)?.[0];
       Object.assign(job, { status: url ? 'scheduled' : 'check', url, doneAt: new Date().toISOString() });
     } catch (e) { job.tries = (job.tries || 0) + 1; job.status = job.tries >= 3 ? 'failed' : 'retry'; job.error = String(e.stderr || e.message).slice(-400); console.error(`✗ ${t.id}/${plat}:`, job.error); }

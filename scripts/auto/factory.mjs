@@ -11,13 +11,14 @@ import { reviewFrames } from './qa.mjs';
 import { makeTitles } from './titles.mjs';
 import { tell, sendVideo, live } from './notify.mjs';
 import { denialCheck } from './watch.mjs';
+import { sameNews } from '../guard.mjs';
 const DRY = process.argv.includes('--dry');
 const FF = fs.existsSync('/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg') ? '/opt/homebrew/opt/ffmpeg-full/bin/' : '';
 const LOGF = path.join(ROOT, 'data/factory.json'); const flog = readJson(LOGF, { runs: [] });
 const cfg = readJson(path.join(ROOT, 'data/config.json'), { autoApprove: false, dailyTarget: 12, platforms: ['youtube', 'facebook', 'instagram'] });
 const T0 = Date.now(); const lines = []; const cur = { topic: '', id: '' };
 const log = (s) => { const m = `[${((Date.now() - T0) / 60000).toFixed(1)}د] ${s}`; console.log(m); lines.push(s); live({ ...cur, stage: s.slice(0, 200) }); };
-const QUIET_STATUS = ['disabled', 'daily-target-reached', 'no-story', 'dry'];
+const QUIET_STATUS = ['disabled', 'daily-target-reached', 'no-story', 'dry', 'dup-news', 'denied-before'];
 const done = async (status, extra = {}) => { if (!QUIET_STATUS.includes(status) && status !== 'queued') await tell(`⚠️ فيديو ما كملش (${status})${extra.topic ? `\n«${extra.topic}»` : ''}\n${lines.slice(-2).join('\n')}`); flog.runs.push({ at: new Date().toISOString(), status, ...extra, log: lines.slice(-40) });
   if (!['queued', 'dry'].includes(status) && extra.id) fs.rmSync(path.join(ROOT, 'videos', extra.id), { recursive: true, force: true }); // فيديو ما كملش ما يفضلش في الريبو
   flog.runs = flog.runs.slice(-200); await live({ ...cur, stage: `خلصت الدورة: ${status}` }); writeJson(LOGF, flog); console.log(`\n== ${status}`); process.exit(0); };
@@ -48,6 +49,9 @@ const story = DENIAL ? DENIAL.story : await pickStory({ recent, log, request: re
 if (req && !DENIAL) { req.status = story ? 'done' : 'not-found'; req.at2 = new Date().toISOString(); writeJson(path.join(ROOT, 'data/requests.json'), requests); if (!story) await tell(`🔎 الموضوع اللي طلبته «${req.text}» ما لقيتهوش في جريدتين كبار — مش هعمله عشان المصداقية.`); }
 if (!story) await done('no-story');
 // 🛡️ فريق متابعة النفي قبل ما نبدأ: الحقيقة دي اتصححت/اتنفت رسميًا؟ (درس صلاح 70/68: فيفا كان صحح قبلها بيوم)
+// 🔒 حارس النشر قبل ما نصرف دورة: الخبر ده اتنشر فعلًا في فيديو تاني؟ (المنشورات الحقيقية مش سجل المصنع بس)
+if (!DENIAL) { const d = await sameNews({ id: 'new', topic: story.topic }, { youtube: { title: (story.facts || []).map((f) => f.fact || f).join(' ').slice(0, 200) } }, readJson(path.join(ROOT, 'data/posts.json'), [])).catch(() => '');
+  if (d) { log(`🔒 نفس خبر اتنشر قبل كده: ${d}`); topics.push({ at: new Date().toISOString(), topic: story.topic, id: 'dup' }); writeJson(path.join(ROOT, 'data/topics.json'), topics.slice(-300)); await done('dup-news', { topic: story.topic, why: d }); } }
 if (!DENIAL) { const dc = await denialCheck(story, Date.now(), log).catch((e) => (log(`⊘ فحص النفي: ${e.message}`), { denied: false }));
   if (dc.denied) { log(`🚨 فريق النفي وقف القصة: ${dc.summary} (${(dc.papers || []).join('، ')})`); topics.push({ at: new Date().toISOString(), topic: story.topic, id: 'denied' }); writeJson(path.join(ROOT, 'data/topics.json'), topics.slice(-300)); await done('denied-before', { topic: story.topic, why: dc.summary }); } }
 if (!DRY) await tell(`🎬 بدأت في فيديو جديد:\n«${story.topic}»\n📰 ${new Set(story.sources.map((x) => x.paper)).size} جرايد · ${new Date().toLocaleTimeString('ar-EG', { timeZone: 'Africa/Cairo', hour: 'numeric', minute: '2-digit' })}\n\nالفيديو عن إيه:\n${(story.facts || []).slice(0, 3).map((f) => `• ${f.fact || f}`).join('\n')}\n\nهبعتلك الفيديو أول ما يجهز.`);

@@ -53,10 +53,14 @@ export async function sameNews(t, pack, ledger) {
   const old = [...new Map(ledger.filter((x) => x.video !== t.id && x.status !== 'cancelled' && Date.now() - new Date(x.publishAt || x.recordedAt) < 3 * 86400e3).map((x) => [x.video, x])).values()];
   const near = old.filter((x) => overlap(x.title || '', mine) >= 0.34);
   if (!near.length) return '';
-  const r = await json(`إنت حارس النشر في قناة كورة. الفيديو اللي هيتنشر: «${mine}»
+  // فيديو تصحيح قدام فيديو تصحيح تاني بنفس الكلام = تكرار أكيد (من غير موديل) — درس تصحيح صلاح 68 اللي نزل 3 مرات
+  if (t.kind === 'denial') { const tw = near.find((x) => /denial/.test(x.video)); if (tw) return `${tw.title} (نفس التصحيح اتنشر قبل كده)`; }
+  const r = await json(`إنت حارس النشر في قناة كورة. صاحب القناة مش عاوز **نفس الموضوع يتكرر** في فيديوهين (مش بس نفس الفيديو).
+الفيديو اللي هيتنشر: «${mine}»
 فيديوهات اتنشرت فعلًا آخر 3 أيام:
 ${near.map((x, i) => `${i}. ${x.title}`).join('\n')}
-هل الفيديو الجديد هو **نفس الخبر/الحدث** بتاع واحد منهم (حتى لو بصياغة تانية)؟ خبر جديد فعلًا عن نفس اللاعب (حدث تاني، تطور جديد، نفي أو تصحيح) = مش تكرار.
-رجّع JSON {"dup":true|false,"index":0,"why":""}`, { light: true, temp: 0 });
+dup=true لو الجديد عن **نفس الموضوع** بتاع واحد منهم: نفس الشخص/الحدث/القضية، حتى لو بزاوية تانية أو تصريحات جديدة أو تفاصيل زيادة أو ردود فعل.
+dup=false بس لو فيه **تطور كبير جديد** غيّر الموضوع: نتيجة ماتش اتلعب، قرار رسمي اتاخد بعد ما كان كلام، صفقة اتقفلت، إصابة اتأكدت، أو نفي/تصحيح لأول مرة.
+رجّع JSON {"dup":true|false,"index":0,"why":""}`, { temp: 0 });
   return r.dup ? `${near[r.index]?.title || near[0].title} (${r.why})` : '';
 }
