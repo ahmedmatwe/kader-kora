@@ -60,7 +60,7 @@ jobs:
         if: always()
         env: { GH_TOKEN: '${{ github.token }}' }
         run: |
-          M=$(node -e "const c=require('./data/config.json');const f=require('fs').existsSync('data/factory.json')?require('./data/factory.json'):{runs:[]};const d=new Date().toISOString().slice(0,10);const n=f.runs.filter(r=>r.status==='queued'&&r.at.startsWith(d)).length;const last=f.runs.at(-1)||{};console.log(!c.enabled||n>=c.dailyTarget?'stop':last.status==='spacing'?'space:'+Math.min(30,last.waitMin||10):['llm-quota','tts-quota','no-story'].includes(last.status)?'wait':'go')")
+          M=$(node -e "const c=require('./data/config.json');const f=require('fs').existsSync('data/factory.json')?require('./data/factory.json'):{runs:[]};const cd=(x)=>new Date(x).toLocaleDateString('en-CA',{timeZone:'Africa/Cairo'});const d=cd(Date.now());const n=f.runs.filter(r=>r.status==='queued'&&cd(r.at)===d).length;const last=f.runs.at(-1)||{};console.log(!c.enabled||n>=c.dailyTarget?'stop':last.status==='spacing'?'space:'+Math.min(30,last.waitMin||10):['llm-quota','tts-quota','no-story'].includes(last.status)?'wait':'go')")
           echo "الحالة: $M"
           if [ "$M" = stop ]; then echo "وصلنا الحد اليومي — الكرون هيبدأ بكرة"; exit 0; fi
           if [ "$M" = wait ]; then echo "كوتة/مفيش أخبار — نستنى 10 دقايق ونرجع"; sleep 600; fi
