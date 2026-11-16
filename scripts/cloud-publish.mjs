@@ -4,6 +4,7 @@
 import fs from 'node:fs'; import path from 'node:path'; import { execFileSync } from 'node:child_process';
 import { ROOT, readJson, writeJson, addPost, DATA_REPO, dataEnv } from './lib.mjs';
 import * as meta from './meta.mjs';
+import { scheduleTikTok } from './buffer.mjs';
 import { alreadyOut, persist, sameNews } from './guard.mjs';
 import { tell as tellOwner } from './auto/notify.mjs';
 const qdir = path.join(ROOT, 'queue'); let changed = false;
@@ -31,10 +32,11 @@ for (const f of fs.existsSync(qdir) ? fs.readdirSync(qdir).filter((x) => x.endsW
       if (hit === 'unknown') continue;
       if (hit) { Object.assign(job, { status: plat === 'youtube' ? 'scheduled' : 'published', id: hit.id, url: hit.url, doneAt: new Date().toISOString(), guard: 'لقيته منشور على المنصة' }); console.log(`🔒 ${t.id}/${plat}: كان اتنشر فعلًا ${hit.url} — اتسجّل ومش هيتنشر تاني`); changed = true; continue; }
       if (Date.now() - new Date(job.claimAt) < 40 * 60e3) { console.log(`🔒 ${t.id}/${plat}: لسه بيتنشر من دورة تانية`); continue; }
+      if (plat === 'tiktok') { job.status = 'check'; job.why = 'حجز قديم — اتأكد من Buffer بالإيد'; changed = true; continue; } // Buffer مالوش فحص عنوان عندنا → ما نعيدش النشر على العمياني
       job.status = 'retry';
     }
     if (job.status && job.status !== 'pending' && job.status !== 'retry') continue;
-    const connected = plat === 'youtube' || ((plat === 'facebook' || plat === 'instagram') && process.env.META_PAGE_TOKEN);
+    const connected = plat === 'youtube' || (plat === 'tiktok' && process.env.BUFFER_API_KEY) || ((plat === 'facebook' || plat === 'instagram') && process.env.META_PAGE_TOKEN);
     if (!connected) { console.log(`… ${t.id}/${plat}: المنصة لسه مش متربطة على السحابة`); continue; }
     // فيس وإنستا مالهمش جدولة في الـAPI بتاعنا → بننشر لما الميعاد ييجي (المهمة بتصحى كل نص ساعة)
     if (plat !== 'youtube' && job.at && new Date(job.at) - Date.now() > 30 * 60e3) { // اللي ميعاده خلال نص ساعة بينزل دلوقتي (مانستناش دورة نشر تانية ممكن تتأخر)
@@ -54,7 +56,8 @@ for (const f of fs.existsSync(qdir) ? fs.readdirSync(qdir).filter((x) => x.endsW
         const pack = readJson(path.join(vdir, 'publish.json'));
         execFileSync('gh', ['release', 'download', '-R', DATA_REPO, t.release, '--pattern', '*social.mp4', '--dir', path.join(vdir, 'final'), '--clobber'], { stdio: 'inherit', env: dataEnv() });
         const file = path.join(vdir, pack[plat].file);
-        const r = plat === 'facebook' ? await meta.facebookReel(file, pack.facebook.caption) : await meta.instagramReel(file, pack.instagram.caption, 1500, undefined, job.videoUrl || hostMedia(t.id, file));
+        const r = plat === 'tiktok' ? await (async () => { const url = hostMedia(t.id, file); if (!url) throw new Error('محتاج MEDIA_TOKEN عشان Buffer يسحب الفيديو'); const b = await scheduleTikTok(url, pack.tiktok.caption, new Date().toISOString()); return { id: b.id, url: 'https://www.tiktok.com/@kader_kora' }; })()
+          : plat === 'facebook' ? await meta.facebookReel(file, pack.facebook.caption) : await meta.instagramReel(file, pack.instagram.caption, 1500, undefined, job.videoUrl || hostMedia(t.id, file));
         Object.assign(job, { status: 'published', id: r.id, url: r.url, doneAt: new Date().toISOString() });
         addPost({ platform: plat, video: t.id, id: r.id, url: r.url, publishAt: new Date().toISOString(), title: pack.youtube.title, status: 'published' });
         console.log(`✓ ${t.id}/${plat}: اتنشر ${r.url}`);
