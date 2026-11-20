@@ -66,3 +66,7 @@ jobs:
           if [ "$M" = wait ]; then echo "كوتة/مفيش أخبار — نستنى 10 دقايق ونرجع"; sleep 600; fi
           case "$M" in space:*) echo "ساعة بين كل فيديو — نستنى ${M#space:} دقيقة"; sleep $(( ${M#space:} * 60 ));; esac
           gh workflow run factory.yml
+      - name: استدعاء فريق الإصلاح (لو الدورة وقعت)
+        if: failure()
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: gh workflow run repair.yml -R ${{ github.repository }} -f run_id=${{ github.run_id }} -f wf=factory

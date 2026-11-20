@@ -123,6 +123,15 @@ for (const { f, t } of tickets) {
   if (!DRY) { writeJson(WF, W); if (LOOP_MIN) persist('متابعة النفي'); }
   // نبضة للمصنع: كرون جيت هب بيتأخر ساعات، ففريق المتابعة (شغال على طول) بيصحّي المصنع لو ما اشتغلش من 35 دقيقة
   if (LOOP_MIN && !DRY && !newDenial) { const fr = readJson(path.join(ROOT, 'data/factory.json'), { runs: [] }).runs || []; const last = fr.length ? Date.now() - new Date(fr[fr.length - 1].at) : 1e12; if (last > 35 * 60e3 && !nudgedAt || (nudgedAt && Date.now() - nudgedAt > 35 * 60e3 && last > 35 * 60e3)) { sh('gh', ['workflow', 'run', 'factory.yml']); nudgedAt = Date.now(); log('⏰ صحّيت المصنع'); } }
+  // 🩺 دكتور المصنع: لو آخر 3 دورات مصنع وقعت → يستدعي فريق الإصلاح على آخر واحدة (مرة لكل دورة) ويبلّغ صاحب القناة
+  if (LOOP_MIN && !DRY) try {
+    const runs = JSON.parse(sh('gh', ['run', 'list', '-w', 'factory.yml', '-L', '8', '--json', 'databaseId,conclusion,status']) || '[]').filter((r) => r.status === 'completed' && r.conclusion !== 'cancelled');
+    const last3 = runs.slice(0, 3); const lastId = String(last3[0]?.databaseId || '');
+    if (last3.length === 3 && last3.every((r) => r.conclusion === 'failure') && W.doctorFor !== lastId) {
+      W.doctorFor = lastId; sh('gh', ['workflow', 'run', 'repair.yml', '-f', `run_id=${lastId}`, '-f', 'wf=factory']);
+      await tell('🩺 دكتور المصنع: آخر 3 دورات للمصنع وقعت ورا بعض — استدعيت فريق الإصلاح دلوقتي.').catch(() => {}); log('🩺 استدعيت فريق الإصلاح');
+    }
+  } catch (e) { log(`⚠️ دكتور المصنع: ${e.message}`); }
   if (newDenial && LOOP_MIN && !DRY) { sh('gh', ['workflow', 'run', 'factory.yml']); log('🎬 شغّلت المصنع على فيديو النفي'); newDenial = false; }
 }
 if (MAIN) {

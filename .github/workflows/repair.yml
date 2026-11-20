@@ -1,14 +1,12 @@
 name: repair
 # فريق الإصلاح الدائم في السحابة (Gemini بمفاتيح كادر كورة — من غير الماك ومن غير اشتراك Claude).
-# أول ما أي دورة تقع: يقرا السجل + كتاب الخبرة (REPAIR_PLAYBOOK.md)، يصلّح، يفحص، مراجع مستقل يوافق، وبعدين يرفع ويشغّل المصنع تاني.
+# أول ما أي دورة تقع (كل ورك فلو بيستدعيه بنفسه — workflow_run كان أعمى عن الدورات اللي GITHUB_TOKEN شغّلها): يقرا السجل + كتاب الخبرة (REPAIR_PLAYBOOK.md)، يصلّح، يفحص، مراجع مستقل يوافق، وبعدين يرفع ويشغّل المصنع تاني.
 on:
-  workflow_run: { workflows: [factory, publish, comments, stats], types: [completed] }
-  workflow_dispatch: { inputs: { run_id: { description: 'رقم الدورة اللي وقعت', required: true } } }
+  workflow_dispatch: { inputs: { run_id: { description: 'رقم الدورة اللي وقعت', required: true }, wf: { description: 'اسم الورك فلو', required: false, default: 'factory' } } }
 permissions: { contents: write, actions: write }
 concurrency: { group: repair, cancel-in-progress: false }
 jobs:
   fix:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'failure'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -16,7 +14,7 @@ jobs:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
       RUN_SHA: ${{ github.event.workflow_run.head_sha }}
-      WF: ${{ github.event.workflow_run.name || 'factory' }}
+      WF: ${{ github.event.workflow_run.name || inputs.wf || 'factory' }}
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }

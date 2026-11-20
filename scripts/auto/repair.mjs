@@ -22,8 +22,8 @@ if (EXTERNAL.test(errLine || log.slice(-1500)) && !/SyntaxError|ReferenceError|T
 // 2) ما نكررش نفس الإصلاح أكتر من مرتين في اليوم
 const sig = errLine.replace(/\d+/g, '#').replace(/\/home\/runner\/work\/[^ ]+?\//g, '').slice(0, 160) || 'unknown';
 const repF = path.join(ROOT, 'data/repairs.json'); const reps = fs.existsSync(repF) ? JSON.parse(fs.readFileSync(repF, 'utf8')) : { runs: [] };
-const today = new Date().toISOString().slice(0, 10);
-const tries = reps.runs.filter((r) => r.sig === sig && r.at.startsWith(today)).length;
+const cd = (d) => new Date(d).toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' }); const today = cd(Date.now());
+const tries = reps.runs.filter((r) => r.sig === sig && cd(r.at) === today).length;
 const record = (status, extra = {}) => { reps.runs.push({ at: new Date().toISOString(), wf, sig, status, ...extra }); reps.runs = reps.runs.slice(-200); fs.writeFileSync(repF, JSON.stringify(reps, null, 1)); };
 if (tries >= 2) { record('gave-up'); finish({ status: 'gave-up', message: `نفس الغلطة اتكررت بعد محاولتين إصلاح النهارده — محتاجة تدخل: ${errLine}` }); }
 

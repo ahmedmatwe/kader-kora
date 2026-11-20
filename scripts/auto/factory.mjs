@@ -31,7 +31,10 @@ const today = cairoDay(Date.now());
 const madeToday = flog.runs.filter((r) => r.status === 'queued' && cairoDay(r.at) === today).length;
 const requests = readJson(path.join(ROOT, 'data/requests.json'), []);
 // فيديو النفي (من فريق متابعة النفي) ليه الأولوية على أي حاجة، وما بيقفش عند الحد اليومي
+// 🧯 قاطع الدايرة: أي طلب اتجرّب 3 مرات ووقع يتركن ويتبلّغ صاحب القناة — المصنع عمره ما يقف على حاجة واحدة (درس فيديو النفي 68: 28 ساعة واقفين)
+for (const r of requests.filter((x) => x.status === 'pending' && (x.tries || 0) >= 3)) { r.status = 'parked'; r.parkedAt = new Date().toISOString(); await tell(`🧯 ركنت طلب وقع 3 مرات عشان المصنع ما يقفش:\n«${r.story?.topic || r.text || r.corrects}»\nفريق الإصلاح هيدوّر على السبب.`).catch(() => {}); }
 const req = requests.find((r) => r.status === 'pending' && r.kind === 'denial') || requests.find((r) => r.status === 'pending');
+if (req) { req.tries = (req.tries || 0) + 1; writeJson(path.join(ROOT, 'data/requests.json'), requests); } // بيتحفظ حتى لو الدورة وقعت بعد كده
 const DENIAL = req?.kind === 'denial' ? req : null;
 if (madeToday >= cfg.dailyTarget && !DENIAL) await done('daily-target-reached', { madeToday });
 // ساعة بين كل فيديو والتاني (طلب صاحب القناة) — فيديو النفي/التصحيح بس مستعجل ومن غير انتظار

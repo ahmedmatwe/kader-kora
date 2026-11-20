@@ -2,7 +2,7 @@ name: stats
 on:
   schedule: [{ cron: '0 7 * * *' }]   # 9 الصبح بتوقيت القاهرة
   workflow_dispatch:
-permissions: { contents: write }
+permissions: { contents: write, actions: write }
 jobs:
   stats:
     runs-on: ubuntu-latest
@@ -33,3 +33,7 @@ jobs:
           ls -t logs/* 2>/dev/null | tail -n +120 | xargs rm -f
           git add -A; git diff --cached --quiet || git commit -qm "إحصائيات يومية"
           for i in 1 2 3 4 5 6; do git pull -q --rebase -X theirs && git push -q && break; sleep $((i*5)); done
+      - name: استدعاء فريق الإصلاح (لو الدورة وقعت)
+        if: failure()
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: gh workflow run repair.yml -R ${{ github.repository }} -f run_id=${{ github.run_id }} -f wf=stats
