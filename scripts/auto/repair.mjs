@@ -63,6 +63,44 @@ function checks(changed) {
   return errs;
 }
 
+// 4.5) 🧠 التحقيق: الموظف بيفكّر خطوة بخطوة — بيقرا ملفات، يدوّر في الكود، يبص على البيانات وتاريخ الدورات — لحد ما يفهم السبب الجذري.
+//      وكمان يقدر ياخد قرار تشغيلي آمن يفك المصنع على طول (يركن طلب عالق، يشغّل ورك فلو تاني) قبل ما يصلّح الكود.
+const tool = {
+  read: ({ file, from = 1, to = 200 }) => { const f = String(file).replace(/^\.?\//, ''); if (/(^|\/)\.env|secret|token|key/i.test(f)) return 'ممنوع'; const t = fs.readFileSync(path.join(ROOT, f), 'utf8').split('\n'); return t.slice(Math.max(0, from - 1), Math.min(t.length, to)).map((l, i) => `${from + i}: ${l}`).join('\n').slice(0, 15000); },
+  grep: ({ pattern }) => { try { return execFileSync('grep', ['-rnE', String(pattern), 'scripts', 'motion/src', 'bot/worker.js', '.github/workflows'], { cwd: ROOT, encoding: 'utf8' }).slice(0, 8000); } catch { return '(مفيش)'; } },
+  data: ({ file }) => { const f = String(file).replace(/^\.?\//, ''); if (!/^(data|queue)\/[\w.-]+\.json$/.test(f)) return 'data/*.json أو queue/*.json بس'; return fs.readFileSync(path.join(ROOT, f), 'utf8').slice(-12000); },
+  ls: ({ dir }) => { const d = String(dir || '.').replace(/^\.?\//, ''); return fs.readdirSync(path.join(ROOT, d)).slice(-80).join('\n'); },
+  runs: ({ workflow = 'factory.yml' }) => { try { return execFileSync('gh', ['run', 'list', '-w', String(workflow), '-L', '15', '--json', 'createdAt,conclusion,event'], { cwd: ROOT, encoding: 'utf8' }); } catch (e) { return e.message; } },
+  history: () => JSON.stringify(reps.runs.slice(-15)),
+};
+const ops = []; // قرارات تشغيلية اتاخدت
+const OPS = {
+  park_request: ({ index, why }) => { const f = path.join(ROOT, 'data/requests.json'); const rq = JSON.parse(fs.readFileSync(f, 'utf8')); const r = rq[index]; if (!r || r.status !== 'pending') return 'مش موجود أو مش pending'; Object.assign(r, { status: 'parked', parkedAt: new Date().toISOString(), why }); fs.writeFileSync(f, JSON.stringify(rq, null, 1)); ops.push(`ركنت الطلب ${index}: ${why}`); return 'اتركن'; },
+  rerun: ({ workflow }) => { if (!/^(factory|publish|watch)\.yml$/.test(workflow)) return 'مش مسموح'; execFileSync('gh', ['workflow', 'run', workflow], { cwd: ROOT }); ops.push(`شغّلت ${workflow}`); return 'اشتغل'; },
+};
+let notes = '';
+for (let step = 0; step < 10; step++) {
+  const a = await json(`إنت موظف إصلاح ذكي في مصنع «كادر كورة» (مش بوت بقواعد). بتفكر زي مهندس: فرضية → تتأكد منها بالأدوات → سبب جذري.
+${playbook.slice(0, 7000)}
+===== سجل الدورة اللي وقعت (${wf}):\n${log.slice(-6000)}
+===== ملاحظاتك لحد دلوقتي:\n${notes || '(لسه)'}
+الأدوات (أداة واحدة كل خطوة):
+- read {file,from,to}: تقرا سطور من ملف كود
+- grep {pattern}: تدوّر في الكود والورك فلوز
+- data {file}: تقرا data/*.json أو queue/*.json (الطلبات، سجل المصنع، التذاكر)
+- ls {dir} · runs {workflow} (تاريخ الدورات) · history {} (إصلاحاتك اللي فاتت)
+قرارات تشغيلية آمنة (لو حاجة واحدة عالقة موقّفة المصنع كله):
+- park_request {index,why}: تركن طلب في data/requests.json بيوقّع المصنع كل مرة
+- rerun {workflow}: تشغّل factory.yml/publish.yml/watch.yml
+لما تفهم السبب: {"done":true,"root_cause":"..."}
+رجّع JSON: {"thought":"بتفكر في إيه","tool":"read","args":{...}} أو {"done":true,"root_cause":"..."}`, { temp: 0.2 }).catch(() => ({ done: true, root_cause: '' }));
+  if (a.done) { if (a.root_cause) notes += `\n🎯 السبب الجذري: ${a.root_cause}`; break; }
+  let out; try { out = (tool[a.tool] || OPS[a.tool] || (() => 'أداة مش موجودة'))(a.args || {}); } catch (e) { out = `غلطة: ${e.message}`; }
+  notes += `\n— ${a.thought || ''}\n  ${a.tool} ${JSON.stringify(a.args || {})} →\n${String(out).slice(0, 3000)}`;
+  console.log(`🧠 ${a.thought || ''} · ${a.tool}`);
+}
+notes = notes.slice(-14000);
+
 // 5) التشخيص + الإصلاح (محاولتين، التانية بتاخد نتيجة الفحص)
 let feedback = '';
 for (let attempt = 0; attempt < 2; attempt++) {
@@ -75,14 +113,17 @@ ${log.slice(-9000)}
 
 ===== الملفات:
 ${src || '(مفيش ملفات ظاهرة في الغلطة)'}
-${sinceTxt}${feedback ? `\n===== محاولتك اللي فاتت ما عدّتش الفحص:\n${feedback}\n` : ''}
+${sinceTxt}
+===== تحقيقك (اللي لقيته بنفسك بالأدوات):
+${notes}
+${ops.length ? `\n===== قرارات تشغيلية خدتها: ${ops.join(' · ')}\n` : ''}${feedback ? `\n===== محاولتك اللي فاتت ما عدّتش الفحص:\n${feedback}\n` : ''}
 رجّع JSON:
 {"diagnosis":"سطرين بالمصري: الغلطة إيه وسببها","external":false,"confident":true,
  "edits":[{"file":"scripts/auto/x.mjs","find":"نص موجود في الملف بالظبط (سطر أو أكتر، فريد)","replace":"النص الجديد"}]}
 - find لازم يكون منسوخ حرف بحرف من الملف وموجود مرة واحدة بس.
 - الملفات المسموحة بس: scripts/ و motion/src/ و bot/worker.js. ممنوع data/ و queue/ و .github/.
 - لو السبب خارجي أو مش متأكد: external=true أو confident=false و edits فاضية.`, { temp: 0.1 });
-  if (r.external || !r.confident || !(r.edits || []).length) { record('diagnosed', { diagnosis: r.diagnosis }); finish({ status: 'diagnosed', message: r.diagnosis || 'مفيش إصلاح مؤكد' }); }
+  if (r.external || !r.confident || !(r.edits || []).length) { record('diagnosed', { diagnosis: r.diagnosis, ops }); finish({ status: ops.length ? 'fixed' : 'diagnosed', message: `${r.diagnosis || 'مفيش إصلاح كود مؤكد'}${ops.length ? `\n🧯 ${ops.join(' · ')}` : ''}`, files: ops.length ? ['data/requests.json'] : [] }); }
   // تطبيق
   const backup = new Map(); const bad = [];
   for (const e of r.edits) {
@@ -108,7 +149,7 @@ ${sinceTxt}
 رجّع JSON {"approve":true|false,"why":"سطر بالمصري"}`, { temp: 0 }).catch(() => ({ approve: false, why: 'المراجع ما ردّش' }));
     if (!rv.approve) errs = [`المراجع رفض: ${rv.why}`];
   }
-  if (!errs.length && changed.length) { record('fixed', { files: changed, diagnosis: r.diagnosis }); finish({ status: 'fixed', message: r.diagnosis, files: changed }); }
+  if (!errs.length && changed.length) { record('fixed', { files: changed, diagnosis: r.diagnosis, ops }); finish({ status: 'fixed', message: `${r.diagnosis}${ops.length ? `\n🧯 ${ops.join(' · ')}` : ''}`, files: changed }); }
   for (const [f, c] of backup) fs.writeFileSync(path.join(ROOT, f), c); // رجوع
   feedback = errs.join('\n');
 }
