@@ -23,3 +23,11 @@ export async function scheduleTikTok(videoUrl, text, dueAt, key = process.env.BU
   if (!r.createPost.post) throw new Error(`Buffer: ${r.createPost.message ?? 'البوست ما اتعملش'}`);
   return { id: r.createPost.post.id, channel: ch.name };
 }
+/** 🔒 حارس القناة (تنبيه بس، من غير مسح): بوستات على تيك توك كادر كورة مش من تذاكرنا (زي فيديوهات «سر الموبايل» اللي نزلت غلط هنا 15–18 نوفمبر).
+ *  ourTexts = كابشنات تيك توك بتاعة تذاكرنا. بيرجّع البوستات الغريبة (متجدولة أو اتبعتت آخر 6 ساعات) */
+export async function findIntruders(ourTexts, key = process.env.BUFFER_API_KEY) {
+  const ch = await tiktokChannel(key); const n = (s) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+  const mine = new Set(ourTexts.map(n));
+  const { posts } = await gql(key, 'query($org: OrganizationId!, $ch: ChannelId!) { posts(first: 30, input: { organizationId: $org, filter: { channelIds: [$ch], status: [scheduled, sending, sent] }, sort: [{ field: dueAt, direction: desc }] }) { edges { node { id text status dueAt } } } }', { org: ch.org, ch: ch.id });
+  return posts.edges.map((e) => e.node).filter((p) => !mine.has(n(p.text)) && (p.status !== 'sent' || Date.now() - new Date(p.dueAt) < 6 * 3600e3));
+}

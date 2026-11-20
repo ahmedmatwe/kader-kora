@@ -4,7 +4,7 @@
 import fs from 'node:fs'; import path from 'node:path'; import { execFileSync } from 'node:child_process';
 import { ROOT, readJson, writeJson, addPost, DATA_REPO, dataEnv } from './lib.mjs';
 import * as meta from './meta.mjs';
-import { scheduleTikTok } from './buffer.mjs';
+import { scheduleTikTok, findIntruders } from './buffer.mjs';
 import { alreadyOut, persist, sameNews } from './guard.mjs';
 import { tell as tellOwner } from './auto/notify.mjs';
 const qdir = path.join(ROOT, 'queue'); let changed = false;
@@ -75,4 +75,11 @@ for (const f of fs.existsSync(qdir) ? fs.readdirSync(qdir).filter((x) => x.endsW
   }
   writeJson(p, t);
 }
+// 🔒 حارس قناة تيك توك: بيبلّغ صاحب القناة لو فيه بوست غريب (من قناة تانية في نفس حساب Buffer) على كادر كورة — مرة واحدة لكل بوست
+if (process.env.BUFFER_API_KEY) try {
+  const ours = fs.readdirSync(qdir).filter((x) => x.endsWith('.json')).map((x) => readJson(path.join(ROOT, 'videos', x.replace(/\.json$/, ''), 'publish.json'), null)?.tiktok?.caption).filter(Boolean);
+  const seenF = path.join(ROOT, 'data/intruders.json'); const seen = readJson(seenF, []);
+  const fresh = (await findIntruders(ours)).filter((p) => !seen.includes(p.id));
+  if (fresh.length) { writeJson(seenF, [...seen, ...fresh.map((p) => p.id)].slice(-200)); persist('حارس تيك توك: بوست غريب'); await tellOwner(`🚨 حارس تيك توك: فيه ${fresh.length} فيديو مش بتاع كادر كورة على قناة التيك توك بتاعتنا في Buffer:\n${fresh.map((p) => `• ${p.status === 'sent' ? 'نزل' : 'متجدول'} — ${String(p.text).slice(0, 60)}`).join('\n')}\nمسحتهوش — قولّي لو عاوز يتمسح.`); console.log(`🚨 ${fresh.length} بوست غريب على تيك توك كادر`); }
+} catch (e) { console.log(`⚠️ حارس تيك توك: ${e.message}`); }
 console.log(changed ? 'اتحدّث الطابور' : 'مفيش حاجة عليها الدور');
