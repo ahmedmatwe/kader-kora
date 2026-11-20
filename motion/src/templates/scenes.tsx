@@ -96,7 +96,7 @@ export const ClaimScene: React.FC<{ who: string; value: string; unit: string; no
         <span style={{ background: 'rgba(255,255,255,0.12)', padding: '8px 26px', borderRadius: 16 }}>{who}</span>
       </div>
       <div style={{ position: 'absolute', top: 600, left: SAFE.left, right: SAFE.right, textAlign: 'center', transform: `scale(${q})` }}>
-        <Num style={{ fontSize: 330, color: C.gold, lineHeight: 1 }}>{value}</Num>
+        <Num style={{ fontSize: Math.min(330, Math.floor(1300 / Math.max(1, String(value).length))), color: C.gold, lineHeight: 1, whiteSpace: 'nowrap' }}>{value}</Num>
         <div style={{ ...ar, fontSize: 64, fontWeight: 900 }}>{unit}</div>
       </div>
       {note && <div style={{ position: 'absolute', top: 1100, left: SAFE.left, right: SAFE.right, textAlign: 'center', ...ar, fontSize: 44, fontWeight: 700, color: C.mute, opacity: useIn(20) }}>{note}</div>}
@@ -219,11 +219,16 @@ export const StatScene: React.FC<{ value: number; prefix?: string; suffix?: stri
   return (
     <AbsoluteFill>
       <BrandBg />
-      <div style={{ position: 'absolute', top: 540, left: SAFE.left, right: SAFE.right, textAlign: 'center', opacity: p, direction: 'rtl' }}>
-        {prefix && <span style={{ ...ar, fontSize: 90, fontWeight: 900, marginLeft: 20 }}>{prefix}</span>}<Num style={{ fontSize: 300, color: C.gold, lineHeight: 1 }}>{String(n)}</Num>{suffix && <span style={{ ...ar, fontSize: 90, fontWeight: 900, marginRight: 20 }}>{suffix.trim()}</span>}
+      {/* عمود واحد (مش أماكن ثابتة): الرقم الطويل كان بيلف لسطرين ويركب على الجملة اللي تحته — درس فيديو 74 «أكثر من 10000» */}
+      <div style={{ position: 'absolute', top: 500, left: SAFE.left, right: SAFE.right, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18, textAlign: 'center', direction: 'rtl' }}>
+        {prefix && <div style={{ ...ar, fontSize: 80, fontWeight: 900, opacity: p }}>{prefix}</div>}
+        <div style={{ opacity: p, whiteSpace: 'nowrap' }}>
+          <Num style={{ fontSize: Math.min(300, Math.floor(1300 / Math.max(1, String(Math.round(v)).length + (suffix ? suffix.trim().length * 0.6 : 0)))), color: C.gold, lineHeight: 1 }}>{String(n)}</Num>
+          {suffix && <span style={{ ...ar, fontSize: 80, fontWeight: 900, marginRight: 20 }}>{suffix.trim()}</span>}
+        </div>
+        <div style={{ ...ar, fontSize: label.length > 22 ? 54 : 66, fontWeight: 900, lineHeight: 1.25, opacity: useIn(10), marginTop: 20 }}>{label}</div>
+        {note && <div style={{ ...ar, fontSize: 42, fontWeight: 700, color: C.mute, opacity: useIn(24), whiteSpace: 'pre-line' }}>{note}</div>}
       </div>
-      <div style={{ position: 'absolute', top: 900, left: SAFE.left, right: SAFE.right, textAlign: 'center', ...ar, fontSize: 66, fontWeight: 900, opacity: useIn(10) }}>{label}</div>
-      {note && <div style={{ position: 'absolute', top: 1060, left: SAFE.left, right: SAFE.right, textAlign: 'center', ...ar, fontSize: 42, fontWeight: 700, color: C.mute, opacity: useIn(24), whiteSpace: 'pre-line' }}>{note}</div>}
     </AbsoluteFill>
   );
 };

@@ -34,9 +34,10 @@ export async function json(prompt, { light = false, temp = 0.5, fast = false } =
   throw new Error('Gemini ما رجّعش JSON سليم');
 }
 /** رؤية: صورة/صور + سؤال → JSON */
-export async function vision(prompt, images) {
+export async function vision(prompt, images, { smart = false } = {}) {
   const parts = [{ text: prompt }, ...images.map((f) => ({ inlineData: { mimeType: f.endsWith('.png') ? 'image/png' : 'image/jpeg', data: fs.readFileSync(f).toString('base64') } }))];
-  const p = await call(LIGHT, parts, { responseMimeType: 'application/json', temperature: 0.1, thinkingConfig: { thinkingLevel: 'minimal' } });
+  // smart: موديل أقوى بيفكّر (المراجعة النهائية) — الخفيف عدّى كلام راكب على كلام في فيديو 74
+  const p = await call(smart ? WRITE : LIGHT, parts, { responseMimeType: 'application/json', temperature: 0.1, ...(smart ? {} : { thinkingConfig: { thinkingLevel: 'minimal' } }) });
   return JSON.parse(p.map((x) => x.text || '').join(''));
 }
 /** تفريغ صوت (مراجعة إن الصوت قال النص بالظبط) */
