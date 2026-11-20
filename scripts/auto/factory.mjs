@@ -179,7 +179,10 @@ writeJson(path.join(dir, 'publish.json'), {
 
 // 9) رفع الملفات (ريليس خاص) + تذكرة الطابور بمواعيد فريق المواعيد
 const rel = `v-${id}`;
-execFileSync('gh', ['release', 'create', '-R', DATA_REPO, rel, social, yt, path.join(dir, 'final', `${id}-cover.jpg`), path.join(dir, 'final', `${id}.ar.srt`), '--title', id, '--notes', story.topic], { cwd: ROOT, stdio: 'inherit', env: dataEnv() });
+{ const files = [social, yt, path.join(dir, 'final', `${id}-cover.jpg`), path.join(dir, 'final', `${id}.ar.srt`)];
+  // ريليس بنفس الاسم من محاولة قبل كده وقعت بعد الرفع → نرفع فوقه (كان بيلف 28 ساعة على فيديو النفي 68 والمصنع واقف)
+  let exists = false; try { execFileSync('gh', ['release', 'view', '-R', DATA_REPO, rel], { stdio: 'ignore', env: dataEnv() }); exists = true; } catch {}
+  execFileSync('gh', exists ? ['release', 'upload', '-R', DATA_REPO, rel, ...files, '--clobber'] : ['release', 'create', '-R', DATA_REPO, rel, ...files, '--title', id, '--notes', story.topic], { cwd: ROOT, stdio: 'inherit', env: dataEnv() }); }
 const sched = JSON.parse(execFileSync('node', [path.join(ROOT, 'scripts/schedule.mjs'), '--type', story.type || 'news'], { encoding: 'utf8' }).trim().split('\n').pop());
 const queued = fs.readdirSync(path.join(ROOT, 'queue')).filter((x) => x.endsWith('.json')).map((x) => readJson(path.join(ROOT, 'queue', x)));
 const slot = (p) => { // نشر مباشر (cfg.publishNow): دلوقتي على طول — بس مش فيديوهين على نفس المنصة في أقل من 20 دقيقة
