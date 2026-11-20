@@ -51,7 +51,7 @@ export const BgPhoto = React.createContext<{ src: string; focusX?: number; credi
 export const BrandBg: React.FC = () => {
   const f = useCurrentFrame(); const bg = React.useContext(BgPhoto);
   return (
-    <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(120% 80% at 50% 30%, ${C.navy2} 0%, ${C.navy} 70%)` }}>
+    <div style={{ position: 'absolute', inset: '-140px 0 0 0', background: `radial-gradient(120% 80% at 50% 30%, ${C.navy2} 0%, ${C.navy} 70%)` }}>
       {bg && <>
         {bg.video ? <OffthreadVideo muted src={staticFile(bg.src)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.62, filter: 'saturate(1.1) contrast(1.05)' }} /> : <Img src={staticFile(bg.src)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: `${bg.focusX ?? 50}% 15%`, opacity: 0.62, transform: `scale(${1.08 + f * 0.0009})`, filter: 'saturate(1.1) contrast(1.05)' }} />}
         <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(180deg, rgba(8,16,40,0.25) 0%, rgba(8,16,40,0.5) 35%, rgba(8,16,40,0.72) 65%, rgba(8,16,40,0.9) 100%)` }} />

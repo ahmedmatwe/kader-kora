@@ -33,7 +33,7 @@ export const Watermark: React.FC<{ date?: string }> = ({ date }) => {
 };
 
 export const SourceStrip: React.FC<{ text: string }> = ({ text }) => (
-  <div style={{ position: 'absolute', bottom: 440, left: 60, right: SAFE.right, textAlign: 'right', ...ar, fontSize: 28, fontWeight: 600, color: C.mute }}>{text}</div>
+  <div style={{ position: 'absolute', bottom: 360, left: 60, right: SAFE.right, textAlign: 'right', ...ar, fontSize: 28, fontWeight: 600, color: C.mute }}>{text}</div>
 );
 
 export interface Caption { start: number; end: number; text: string }
@@ -48,7 +48,7 @@ export const Captions: React.FC<{ items: Caption[]; fps: number }> = ({ items, f
   const pop = interpolate(local, [0, 5], [0.9, 1], { extrapolateRight: 'clamp' });
   const parts = c.text.split(/(\*[^*]+\*)/g).filter(Boolean);
   return (
-    <div style={{ position: 'absolute', bottom: 500, left: 60, right: SAFE.right, display: 'flex', justifyContent: 'center' }}>
+    <div style={{ position: 'absolute', bottom: 420, left: 60, right: SAFE.right, display: 'flex', justifyContent: 'center' }}>
       <div style={{ ...ar, fontWeight: 900, fontSize: Math.min(54, Math.floor(1500 / Math.max(1, c.text.replace(/\*/g, '').length))), whiteSpace: 'nowrap', lineHeight: 1.3, textAlign: 'center', background: 'rgba(5,10,25,0.72)', padding: '10px 26px', borderRadius: 18, transform: `scale(${pop})` }}>
         {parts.map((p, i) => (p.startsWith('*') ? <span key={i} style={{ color: C.gold }}>{p.slice(1, -1)}</span> : <span key={i}>{p}</span>))}
       </div>
@@ -58,9 +58,9 @@ export const Captions: React.FC<{ items: Caption[]; fps: number }> = ({ items, f
 
 /** شارة «صورة أرشيفية» / «رسم توضيحي» + الحقوق */
 export const PhotoLabel: React.FC<{ label: string; credit: string }> = ({ label, credit }) => (
-  <div style={{ position: 'absolute', top: SAFE.top + 175, right: SAFE.right, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-    <div style={{ ...ar, fontSize: 30, fontWeight: 800, background: 'rgba(0,0,0,0.65)', padding: '4px 16px', borderRadius: 10 }}>{label}</div>
-    <div style={{ fontFamily: FONT, fontSize: 24, color: '#ddd', background: 'rgba(0,0,0,0.5)', padding: '2px 10px', borderRadius: 8, direction: 'ltr' }}>{credit}</div>
+  <div style={{ position: 'absolute', bottom: 300, left: SAFE.left, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
+    <div style={{ ...ar, fontSize: 26, fontWeight: 800, background: 'rgba(0,0,0,0.65)', padding: '3px 14px', borderRadius: 10 }}>{label}</div>
+    <div style={{ fontFamily: FONT, fontSize: 20, color: '#ddd', background: 'rgba(0,0,0,0.5)', padding: '2px 10px', borderRadius: 8, direction: 'ltr' }}>{credit}</div>
   </div>
 );
 

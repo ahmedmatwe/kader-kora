@@ -20,6 +20,8 @@ const Fade: React.FC<{ frames: number; children: React.ReactNode }> = ({ frames,
   return <AbsoluteFill style={{ opacity: o }}>{children}</AbsoluteFill>;
 };
 
+// المحتوى بينزل لتحت عشان يملا الطول 9:16 (كان محشور في النص اللي فوق) — الخلفيات بتعوّض بالطلوع لفوق
+const SHIFT = 100;
 export const NewsShort: React.FC<Plan> = (plan) => {
   const { fps } = useVideoConfig();
   return (
@@ -30,9 +32,9 @@ export const NewsShort: React.FC<Plan> = (plan) => {
         const from = Math.round(sc.start * fps);
         const frames = Math.max(1, Math.round(sc.end * fps) - from);
         return (
-          <Sequence key={i} from={from} durationInFrames={frames}>
+          <Sequence key={i} from={from} durationInFrames={frames}><AbsoluteFill style={{ transform: `translateY(${SHIFT}px)` }}>
             <BgPhoto.Provider value={sc.type !== 'photo' && typeof sc.bg === 'string' ? { src: sc.bg as string, focusX: sc.bgFocusX as number | undefined, credit: sc.bgCredit as string | undefined, video: !!sc.bgVideo } : null}><Fade frames={frames}><Comp {...sc} frames={frames} /></Fade></BgPhoto.Provider>
-          </Sequence>
+          </AbsoluteFill></Sequence>
         );
       })}
       <TrendBar text={plan.trend} />

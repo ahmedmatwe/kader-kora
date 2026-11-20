@@ -22,10 +22,10 @@ export const PhotoScene: React.FC<{ src: string; label: string; credit: string; 
   const pb = useIn(10);
   return (
     <AbsoluteFill>
-      <Img src={staticFile(src)} style={{ position: 'absolute', top: 260, left: 0, width: '100%', height: 1660, objectFit: 'cover', objectPosition: `${focusX}% 0%`, transform: `scale(${s})`, transformOrigin: '40% 25%' }} />
-      <AbsoluteFill style={{ background: 'linear-gradient(180deg, rgba(10,20,48,1) 0%, rgba(10,20,48,0.2) 22%, rgba(10,20,48,0) 38%, rgba(10,20,48,0.85) 52%, rgba(10,20,48,0.96) 70%)' }} />
+      <Img src={staticFile(src)} style={{ position: 'absolute', top: -100, left: 0, width: '100%', height: 2020, objectFit: 'cover', objectPosition: `${focusX}% 0%`, transform: `scale(${s})`, transformOrigin: '40% 25%' }} />
+      <AbsoluteFill style={{ top: -100, background: 'linear-gradient(180deg, rgba(10,20,48,0.85) 0%, rgba(10,20,48,0.15) 18%, rgba(10,20,48,0) 34%, rgba(10,20,48,0.55) 50%, rgba(10,20,48,0.92) 62%, rgba(10,20,48,0.97) 100%)' }} />
       <PhotoLabel label={label} credit={credit} />
-      {title && <Title text={title} accent={accent} top={940} size={86} delay={4} />}
+      {title && <Title text={title} accent={accent} top={960} size={86} delay={4} />}
       {badge && (
         <div style={{ position: 'absolute', top: 600, left: SAFE.left, right: SAFE.right, display: 'flex', justifyContent: 'flex-start', direction: 'rtl' }}>
           <div style={{ transform: `scale(${pb}) rotate(${6 * pb}deg)`, background: C.white, color: C.navy, borderRadius: 18, padding: '10px 50px', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
