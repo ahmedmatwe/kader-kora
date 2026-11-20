@@ -40,7 +40,7 @@ jobs:
         if: always()
         run: |
           cd .data; git config user.name "kader-kora-bot"; git config user.email "bot@users.noreply.github.com"
-          ls -t logs/* 2>/dev/null | tail -n +120 | xargs rm -f
+          ls -t logs/* 2>/dev/null | tail -n +600 | xargs rm -f
           git add -A; git diff --cached --quiet || git commit -qm "نشر: تحديث الطابور"
           for i in 1 2 3 4 5 6; do git pull -q --rebase -X theirs && git push -q && break; sleep $((i*5)); done
       - name: استدعاء فريق الإصلاح (لو الدورة وقعت)

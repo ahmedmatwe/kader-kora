@@ -68,17 +68,25 @@ function checks(changed) {
 const tool = {
   read: ({ file, from = 1, to = 200 }) => { const f = String(file).replace(/^\.?\//, ''); if (/(^|\/)\.env|secret|token|key/i.test(f)) return 'ممنوع'; const t = fs.readFileSync(path.join(ROOT, f), 'utf8').split('\n'); return t.slice(Math.max(0, from - 1), Math.min(t.length, to)).map((l, i) => `${from + i}: ${l}`).join('\n').slice(0, 15000); },
   grep: ({ pattern }) => { try { return execFileSync('grep', ['-rnE', String(pattern), 'scripts', 'motion/src', 'bot/worker.js', '.github/workflows'], { cwd: ROOT, encoding: 'utf8' }).slice(0, 8000); } catch { return '(مفيش)'; } },
-  data: ({ file }) => { const f = String(file).replace(/^\.?\//, ''); if (!/^(data|queue)\/[\w.-]+\.json$/.test(f)) return 'data/*.json أو queue/*.json بس'; return fs.readFileSync(path.join(ROOT, f), 'utf8').slice(-12000); },
+  data: ({ file }) => { const f = String(file).replace(/^\.?\//, ''); if (!/^(data|queue)\/[\w.-]+\.json$/.test(f)) return 'data/*.json أو queue/*.json بس';
+    const j = JSON.parse(fs.readFileSync(path.join(ROOT, f), 'utf8'));
+    if (f === 'data/factory.json') return j.runs.slice(-10).map((r) => `${r.at} ${r.status} ${r.id || ''} ${r.error || ''} ${(r.log || []).slice(-2).join(' | ')}`.slice(0, 400)).join('\n'); // مختصر: آخر 10 دورات
+    if (Array.isArray(j)) return j.slice(-12).map((x, i) => `[${j.length - 12 + i < 0 ? i : j.length - 12 + i}] ${JSON.stringify(x).slice(0, 500)}`).join('\n');
+    return JSON.stringify(j).slice(-8000); },
+  logs: () => fs.readdirSync(path.join(ROOT, '.data/logs')).sort().slice(-40).join('\n'),
+  log: ({ name }) => { const f = path.basename(String(name)); const t = fs.readFileSync(path.join(ROOT, '.data/logs', f), 'utf8').split('\n').filter((l) => !/Rendered \d|Stitched \d|\[command\]/.test(l)); return t.slice(-120).join('\n').slice(-9000); },
   ls: ({ dir }) => { const d = String(dir || '.').replace(/^\.?\//, ''); return fs.readdirSync(path.join(ROOT, d)).slice(-80).join('\n'); },
   runs: ({ workflow = 'factory.yml' }) => { try { return execFileSync('gh', ['run', 'list', '-w', String(workflow), '-L', '15', '--json', 'createdAt,conclusion,event'], { cwd: ROOT, encoding: 'utf8' }); } catch (e) { return e.message; } },
   history: () => JSON.stringify(reps.runs.slice(-15)),
 };
 const ops = []; // قرارات تشغيلية اتاخدت
-const OPS = {
+const DRYOPS = process.env.REPAIR_DRY === '1'; // تجربة: القرارات التشغيلية بتتسجل بس من غير تنفيذ
+const OPS0 = {
   park_request: ({ index, why }) => { const f = path.join(ROOT, 'data/requests.json'); const rq = JSON.parse(fs.readFileSync(f, 'utf8')); const r = rq[index]; if (!r || r.status !== 'pending') return 'مش موجود أو مش pending'; Object.assign(r, { status: 'parked', parkedAt: new Date().toISOString(), why }); fs.writeFileSync(f, JSON.stringify(rq, null, 1)); ops.push(`ركنت الطلب ${index}: ${why}`); return 'اتركن'; },
   rerun: ({ workflow }) => { if (!/^(factory|publish|watch)\.yml$/.test(workflow)) return 'مش مسموح'; execFileSync('gh', ['workflow', 'run', workflow], { cwd: ROOT }); ops.push(`شغّلت ${workflow}`); return 'اشتغل'; },
 };
-let notes = ''; const T0 = Date.now();
+const OPS = Object.fromEntries(Object.entries(OPS0).map(([k, f]) => [k, DRYOPS ? (a) => (ops.push(`(تجربة) ${k} ${JSON.stringify(a)}`), 'اتسجل (تجربة)') : f]));
+let notes = ''; const T0 = Date.now(); const done = new Set();
 for (let step = 0; step < 10 && Date.now() - T0 < 8 * 60e3; step++) { // حد 8 دقايق تحقيق — بعدها يصلّح باللي فهمه
   const a = await json(`إنت موظف إصلاح ذكي في مصنع «كادر كورة» (مش بوت بقواعد). بتفكر زي مهندس: فرضية → تتأكد منها بالأدوات → سبب جذري.
 ${playbook.slice(0, 7000)}
@@ -89,12 +97,15 @@ ${playbook.slice(0, 7000)}
 - grep {pattern}: تدوّر في الكود والورك فلوز
 - data {file}: تقرا data/*.json أو queue/*.json (الطلبات، سجل المصنع، التذاكر)
 - ls {dir} · runs {workflow} (تاريخ الدورات) · history {} (إصلاحاتك اللي فاتت)
+- logs {} (أسماء سجلات الدورات) · log {name} (تقرا سجل دورة كامل — لو السجل اللي فوق مش باين فيه الغلطة، دوّر هنا)
+- ما تكررش نفس الأداة بنفس الطلب. لو المعلومة مش كفاية، اسأل سؤال مختلف.
 قرارات تشغيلية آمنة (لو حاجة واحدة عالقة موقّفة المصنع كله):
 - park_request {index,why}: تركن طلب في data/requests.json بيوقّع المصنع كل مرة
 - rerun {workflow}: تشغّل factory.yml/publish.yml/watch.yml
 لما تفهم السبب: {"done":true,"root_cause":"..."}
 رجّع JSON: {"thought":"بتفكر في إيه","tool":"read","args":{...}} أو {"done":true,"root_cause":"..."}`, { temp: 0.2 }).catch(() => ({ done: true, root_cause: '' }));
   if (a.done) { if (a.root_cause) notes += `\n🎯 السبب الجذري: ${a.root_cause}`; break; }
+  const sig = `${a.tool} ${JSON.stringify(a.args || {})}`; if (done.has(sig)) { notes += `\n⚠️ إنت عملت «${sig}» قبل كده ونتيجتها فوق — جرّب أداة أو ملف تاني، أو قول done لو فهمت.`; continue; } done.add(sig);
   let out; try { out = (tool[a.tool] || OPS[a.tool] || (() => 'أداة مش موجودة'))(a.args || {}); } catch (e) { out = `غلطة: ${e.message}`; }
   notes += `\n— ${a.thought || ''}\n  ${a.tool} ${JSON.stringify(a.args || {})} →\n${String(out).slice(0, 3000)}`;
   console.log(`🧠 ${a.thought || ''} · ${a.tool}`);
