@@ -78,8 +78,8 @@ const OPS = {
   park_request: ({ index, why }) => { const f = path.join(ROOT, 'data/requests.json'); const rq = JSON.parse(fs.readFileSync(f, 'utf8')); const r = rq[index]; if (!r || r.status !== 'pending') return 'مش موجود أو مش pending'; Object.assign(r, { status: 'parked', parkedAt: new Date().toISOString(), why }); fs.writeFileSync(f, JSON.stringify(rq, null, 1)); ops.push(`ركنت الطلب ${index}: ${why}`); return 'اتركن'; },
   rerun: ({ workflow }) => { if (!/^(factory|publish|watch)\.yml$/.test(workflow)) return 'مش مسموح'; execFileSync('gh', ['workflow', 'run', workflow], { cwd: ROOT }); ops.push(`شغّلت ${workflow}`); return 'اشتغل'; },
 };
-let notes = '';
-for (let step = 0; step < 10; step++) {
+let notes = ''; const T0 = Date.now();
+for (let step = 0; step < 10 && Date.now() - T0 < 8 * 60e3; step++) { // حد 8 دقايق تحقيق — بعدها يصلّح باللي فهمه
   const a = await json(`إنت موظف إصلاح ذكي في مصنع «كادر كورة» (مش بوت بقواعد). بتفكر زي مهندس: فرضية → تتأكد منها بالأدوات → سبب جذري.
 ${playbook.slice(0, 7000)}
 ===== سجل الدورة اللي وقعت (${wf}):\n${log.slice(-6000)}
