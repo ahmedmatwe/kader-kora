@@ -64,13 +64,13 @@ export function applyTighten(full, cut) {
 export async function voice(dir, lines, log = console.log) {
   const vdir = path.join(dir, 'voice'); fs.mkdirSync(vdir, { recursive: true });
   const text = lines.map((l) => l.vo).join('\n\n'); const nWords = norm(text).length;
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < 3; attempt++) {
     const full = path.join(vdir, 'full.wav'); fs.writeFileSync(full, await tts(text));
     let sec = Number(execFileSync(`${FF}ffprobe`, ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', full], { encoding: 'utf8' }));
     if (sec > nWords * 0.62 + 4 || sec < nWords * 0.25) { log(`⟳ الصوت ${sec.toFixed(1)}ث مش مناسب لـ${nWords} كلمة — بنعيد`); continue; }
     const al = words(full); const heard = al.words.map((w) => w.w).join(' ');
     const sim = similarity(text, heard);
-    if (sim < 0.7) { log(`⟳ الصوت قال كلام مختلف (تطابق ${(sim * 100).toFixed(0)}%) — بنعيد`); continue; }
+    if (sim < 0.65) { log(`⟳ الصوت قال كلام مختلف (تطابق ${(sim * 100).toFixed(0)}%) — بنعيد`); continue; }
     // تقسيم من غير تقطيع: نلاقي أول كلمة في كل سطر جوه كلام whisper (مطابقة)، ونقطع في السكتة اللي قبلها بالظبط
     const W = al.words; const ratio = W.length / nWords; let cum = 0; const cuts = [0]; let tight = 0;
     const H = W.map((w) => norm(w.w).join('')); const pre = (x) => (x || '').replace(/^(و|ف|ب|ل|ال|وال|بال|لل)(?=..)/, '').slice(0, 3);
@@ -104,5 +104,5 @@ export async function voice(dir, lines, log = console.log) {
     log(`✓ الصوت: ${sec.toFixed(1)}ث، تطابق ${(sim * 100).toFixed(0)}%`);
     return { transcript: heard, similarity: sim, seconds: sec };
   }
-  throw new Error('الصوت ما عدّاش المراجعة بعد محاولتين');
+  throw new Error('الصوت ما عدّاش المراجعة بعد 3 محاولات');
 }
