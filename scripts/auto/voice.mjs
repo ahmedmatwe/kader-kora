@@ -28,7 +28,7 @@ async function tts(text) {
 }
 
 const norm = (s) => s.replace(/[ً-ْـ]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/[^؀-ۿ0-9 ]/g, ' ').split(/\s+/).filter(Boolean);
-function similarity(a, b) { const A = norm(a), B = new Set(norm(b)); return A.filter((w) => B.has(w)).length / Math.max(1, A.length); }
+function similarity(a, b) { const A = norm(a), B = new Set(norm(b)); const has = (w) => B.has(w) || (w.startsWith('ال') && B.has(w.slice(2))) || (w.startsWith('و') && B.has(w.slice(1))) || (w.startsWith('وال') && B.has(w.slice(3))) || (w.startsWith('ف') && B.has(w.slice(1))) || (w.startsWith('ب') && B.has(w.slice(1))) || B.has('ال' + w) || B.has('و' + w) || B.has('وال' + w); return A.filter(has).length / Math.max(1, A.length); }
 
 /** الأوقات: faster-whisper (أو whisper-cli على الماك) → [{w,s,e}] */
 function words(file) {
