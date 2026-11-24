@@ -16,8 +16,12 @@ export async function makeTitles({ topic, script, facts }) {
   // حراس آليين: الطول والممنوعات
   const bad = /صوت|AI|https?:|Wikimedia|CC BY|المصادر|المصدر|بحسب|حقوق|Photo/i;
   const clip = (s, n) => (s || '').trim().slice(0, n);
+  t.youtube = t.youtube || {};
   t.youtube.title = clip(t.youtube.title, 70);
   t.youtube.description = (t.youtube.description || '').split('\n').filter((l) => !bad.test(l)).join('\n').trim();
-  for (const k of ['tiktok', 'instagram', 'facebook']) if (bad.test(t[k].caption)) t[k].caption = t[k].caption.split('\n').filter((l) => !bad.test(l)).join('\n').trim();
+  for (const k of ['tiktok', 'instagram', 'facebook']) {
+    t[k] = t[k] || {};
+    if (bad.test(t[k].caption || '')) t[k].caption = (t[k].caption || '').split('\n').filter((l) => !bad.test(l)).join('\n').trim();
+  }
   return t;
 }
