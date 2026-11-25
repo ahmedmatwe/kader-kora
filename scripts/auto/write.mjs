@@ -45,7 +45,7 @@ export async function reviewScript(story, sc) {
   const lines = (r.lines || []).filter((l) => l.support && l.support !== 'none');
   const singles = lines.filter((l) => /^single/.test(l.support));
   for (const l of singles.slice(1)) lines.splice(lines.indexOf(l), 1); // سطر «بحسب» واحد بس
-  return { issues: r.issues || [], lines, hookOk: /^F/.test(lines[0]?.support || '') && lines[0]?.id === sc.lines[0].id, dropped: (r.lines || []).length - lines.length };
+  return { issues: r.issues || [], lines, hookOk: /^F/.test(lines[0]?.support || '') && lines[0]?.id === sc?.lines?.[0]?.id, dropped: (r.lines || []).length - lines.length };
 }
 
 const SCENES = `مكتبة المشاهد (type: props) — كل مشهد بيغطي سطر واحد (from=to=id السطر):
